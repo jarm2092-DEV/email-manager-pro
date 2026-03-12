@@ -107,8 +107,9 @@
     .color-selector{display:flex;gap:4px;align-items:center}
     .color-dot{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:var(--transition)}
     .color-dot:hover,.color-dot.active{border-color:var(--text-primary);transform:scale(1.15)}
-    .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(80px);padding:8px 18px;border-radius:var(--radius);font-size:11.5px;font-weight:600;box-shadow:var(--shadow);z-index:1000;transition:transform 0.3s ease,opacity 0.3s ease;opacity:0;background:var(--success);color:#0f1117}
-    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}.toast.error{background:var(--danger);color:white}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);padding:10px 20px;border-radius:30px;font-size:12px;font-weight:600;box-shadow:0 8px 16px rgba(0,0,0,0.5);z-index:1000;transition:all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);opacity:0;background:var(--success);color:#0f1117;display:flex;align-items:center;gap:8px;pointer-events:none;}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+    .toast.error{background:var(--danger);color:white}
     .empty-state{text-align:center;padding:20px 16px;color:var(--text-muted)}
     .empty-state-icon{font-size:24px;margin-bottom:6px;opacity:0.5}.empty-state-text{font-size:11.5px;line-height:1.6}
     .info-banner{background:var(--accent-subtle);border:1px solid rgba(108,114,255,0.2);border-radius:var(--radius-sm);padding:8px 11px;font-size:11px;color:var(--accent);margin-bottom:12px;line-height:1.5}
@@ -247,21 +248,61 @@ function getAuthor(){return lsGet('author','')||'Anónimo'}
 function getStatuses(){return lsGet('statuses',DEFAULT_STATUSES)}
 function getProjects(){return lsGet('projects',[]).sort((a,b)=>a.localeCompare(b))}
 
-function getEmailData(){
-  if(!customProperties)return{status:'',project:'',responsable:'',notes:[]};
-  try{const r=customProperties.get('EMP_Data');if(!r)return{status:'',project:'',responsable:'',notes:[]};const d=JSON.parse(r);if(!d.responsable)d.responsable='';return d}
-  catch{return{status:'',project:'',responsable:'',notes:[]}}
+function getEmailData() {
+  if(!customProperties) return { status: '', project: '', responsable: '', notes: [] };
+  try {
+    const rawData = customProperties.get('EMP_Data');
+    if(!rawData) return { status: '', project: '', responsable: '', notes: [] };
+    const parsed = JSON.parse(rawData);
+    return {
+      status: parsed.status || '',
+      project: parsed.project || '',
+      responsable: parsed.responsable || '',
+      notes: Array.isArray(parsed.notes) ? parsed.notes : []
+    };
+  } catch(e) {
+    console.warn('EMP: Error parseando datos de email', e);
+    return { status: '', project: '', responsable: '', notes: [] };
+  }
 }
-function setEmailData(data,cb){
-  if(!customProperties){showToast('Abre un email primero',true);return}
-  try{customProperties.set('EMP_Data',JSON.stringify(data));
-    customProperties.saveAsync(function(r){if(r.status===Office.AsyncResultStatus.Succeeded){if(cb)cb()}else showToast('Error: '+(r.error?r.error.message:''),true)})
-  }catch(e){showToast('Error: '+e.message,true)}
+
+function setEmailData(data, cb) {
+  if(!customProperties) {
+    showToast('Abre un email para guardar', true);
+    return;
+  }
+  try {
+    customProperties.set('EMP_Data', JSON.stringify(data));
+    customProperties.saveAsync(function(r) {
+      if(r.status === Office.AsyncResultStatus.Succeeded) {
+        if(cb) cb();
+      } else {
+        console.error('EMP: Save properties fail', r.error);
+        showToast('Error de permisos guardando metadata', true);
+      }
+    });
+  } catch(e) {
+    console.error('EMP: Error crítico escribiendo metadata', e);
+    showToast('Falla en escritura: ' + e.message, true);
+  }
 }
-function loadCustomProperties(cb){
-  if(!mailItem)return;
-  try{mailItem.loadCustomPropertiesAsync(function(r){if(r.status===Office.AsyncResultStatus.Succeeded){customProperties=r.value;if(cb)cb()}else showToast('Error cargando',true)})}
-  catch(e){showToast('Error: '+e.message,true)}
+
+function loadCustomProperties(cb) {
+  if(!mailItem) return;
+  try {
+    mailItem.loadCustomPropertiesAsync(function(r) {
+      if(r.status === Office.AsyncResultStatus.Succeeded) {
+        customProperties = r.value;
+        if(cb) cb();
+      } else {
+        console.warn('EMP: Load properties fail', r.error);
+        showToast('Modo de solo lectura detectado', true);
+      }
+    });
+  } catch(e) {
+    console.error('EMP: Imposible cargar propiedades', e);
+    showToast('Falla del sistema: ' + e.message, true);
+  }
 }
 
 // ── Office Init ──
@@ -325,8 +366,18 @@ function manualSyncTags(){syncCategories();showToast('Etiquetas sincronizadas')}
 // ── Render ──
 function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();updateSummary()}
 function renderStatuses(){
-  const c=document.getElementById('statusContainer'),ss=getStatuses(),d=getEmailData();
-  c.innerHTML=ss.map(s=>`<button class="status-badge ${d.status===s.name?'active':''}" data-color="${s.color}" onclick="toggleStatus('${esc(s.name)}')">${esc(s.name)}</button>`).join('')
+  const c = document.getElementById('statusContainer');
+  const statuses = getStatuses();
+  const emailData = getEmailData();
+  
+  c.innerHTML = statuses.map(s => {
+    const isActive = emailData.status === s.name ? 'active' : '';
+    return `
+      <button class="status-badge ${isActive}" data-color="${s.color}" onclick="toggleStatus('${esc(s.name)}')">
+        ${esc(s.name)}
+      </button>
+    `;
+  }).join('');
 }
 function renderProjectSearch(){
   const d=getEmailData(),si=document.getElementById('projectSearch'),cb=document.getElementById('projectClear');
@@ -383,11 +434,40 @@ function updateHeaderTags(){
   if(d.project){const t=document.createElement('span');t.className='email-category has-project';t.textContent=extractProjectId(d.project)||d.project;el.appendChild(t)}
   if(d.status){const t=document.createElement('span');t.className='email-category has-status';t.textContent=d.status;el.appendChild(t)}
 }
-function renderSettings(){
-  document.getElementById('authorName').value=lsGet('author','');
-  document.getElementById('colorSelector').innerHTML=COLORS.map(c=>`<div class="color-dot ${selectedColor===c.name?'active':''}" style="background:${c.hex}" onclick="pickColor('${c.name}')"></div>`).join('');
-  const ss=getStatuses();document.getElementById('statusList').innerHTML=ss.map((s,i)=>`<div class="editable-item"><div class="item-dot" style="background:var(--${s.color})"></div><span class="item-text">${esc(s.name)}</span><button class="remove-btn" onclick="removeStatus(${i})">✕</button></div>`).join('');
-  const pp=getProjects();document.getElementById('projectList').innerHTML=!pp.length?'<div class="empty-state"><div class="empty-state-text" style="font-size:11px">Agrega proyectos o pega una lista.</div></div>':pp.map((p,i)=>`<div class="editable-item"><span class="item-text">${esc(p)}</span><button class="remove-btn" onclick="removeProject(${i})">✕</button></div>`).join('')
+function renderSettings() {
+  document.getElementById('authorName').value = lsGet('author', '');
+  
+  // Render Colors
+  document.getElementById('colorSelector').innerHTML = COLORS.map(c => 
+    `<div class="color-dot ${selectedColor === c.name ? 'active' : ''}" style="background:${c.hex}" onclick="pickColor('${c.name}')"></div>`
+  ).join('');
+  
+  // Render Statuses
+  const statuses = getStatuses();
+  document.getElementById('statusList').innerHTML = statuses.map((s, i) => `
+    <div class="editable-item">
+      <div class="item-dot" style="background:var(--${s.color})"></div>
+      <span class="item-text">${esc(s.name)}</span>
+      <button class="remove-btn" onclick="removeStatus(${i})">✕</button>
+    </div>
+  `).join('');
+  
+  // Render Projects
+  const projects = getProjects();
+  if (!projects.length) {
+    document.getElementById('projectList').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-text" style="font-size:11px">Agrega proyectos o pega una lista.</div>
+      </div>
+    `;
+  } else {
+    document.getElementById('projectList').innerHTML = projects.map((p, i) => `
+      <div class="editable-item">
+        <span class="item-text">${esc(p)}</span>
+        <button class="remove-btn" onclick="removeProject(${i})">✕</button>
+      </div>
+    `).join('');
+  }
 }
 
 // ── Project Dropdown ──
@@ -543,7 +623,14 @@ function refreshData(){loadCustomProperties(function(){renderAll();updateHeaderT
 
 // ── UI ──
 function switchTab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===n));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+n));if(n==='settings')renderSettings()}
-function showToast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' error':'');clearTimeout(el._t);el._t=setTimeout(()=>{el.className='toast'},2500)}
+function showToast(msg, err){
+  const el = document.getElementById('toast');
+  const icon = err ? '⚠️' : '✅';
+  el.innerHTML = `<span>${icon}</span> <span>${esc(msg)}</span>`;
+  el.className = 'toast show' + (err ? ' error' : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'toast'; }, 3000);
+}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 function simpleHash(s){let h=0;for(let i=0;i<(s||'').length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0}return Math.abs(h)}
 </script>
