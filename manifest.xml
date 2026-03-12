@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xsi:type="MailApp">
+  <Id>a9e50e47-c5d0-4a3b-bd12-8e1f7c4d3a01</Id>
+  <Version>1.2.0.0</Version>
+  <ProviderName>MiEquipo</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Email Manager Pro"/>
+  <Description DefaultValue="Email management with notes, projects and custom statuses."/>
+  <IconUrl DefaultValue="https://jarm2092-dev.github.io/email-manager-pro/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://jarm2092-dev.github.io/email-manager-pro/icon-64.png"/>
+  <SupportUrl DefaultValue="https://jarm2092-dev.github.io/email-manager-pro/taskpane.html"/>
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.1"/>
+    </Sets>
+  </Requirements>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://jarm2092-dev.github.io/email-manager-pro/taskpane.html"/>
+        <RequestedHeight>450</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  <Permissions>ReadWriteItem</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+  </Rule>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <ExtensionPoint xsi:type="MessageReadCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="empGroup">
+                <Label resid="groupLabel"/>
+                <Control xsi:type="Button" id="empButton">
+                  <Label resid="btnLabel"/>
+                  <Supertip>
+                    <Title resid="btnLabel"/>
+                    <Description resid="btnTooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="iconImg"/>
+                    <bt:Image size="32" resid="iconImg"/>
+                    <bt:Image size="80" resid="iconImg"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="taskpaneUrl"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="iconImg" DefaultValue="https://jarm2092-dev.github.io/email-manager-pro/icon-64.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="taskpaneUrl" DefaultValue="https://jarm2092-dev.github.io/email-manager-pro/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="groupLabel" DefaultValue="Email Manager Pro"/>
+        <bt:String id="btnLabel" DefaultValue="Email Manager"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="btnTooltip" DefaultValue="Open the email management panel with notes, projects and statuses."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

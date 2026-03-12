@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Manager Pro</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+    :root{--bg-primary:#0f1117;--bg-secondary:#1a1d27;--bg-card:#222636;--bg-input:#2a2e3f;--bg-hover:#2f3449;--border:#353a4f;--border-focus:#6c72ff;--text-primary:#e8eaf0;--text-secondary:#9398ad;--text-muted:#6b7089;--accent:#6c72ff;--accent-hover:#7f84ff;--accent-subtle:rgba(108,114,255,0.12);--success:#34d399;--success-subtle:rgba(52,211,153,0.12);--warning:#fbbf24;--warning-subtle:rgba(251,191,36,0.12);--danger:#f87171;--danger-subtle:rgba(248,113,113,0.12);--info:#60a5fa;--info-subtle:rgba(96,165,250,0.12);--orange:#fb923c;--orange-subtle:rgba(251,146,60,0.12);--pink:#f472b6;--pink-subtle:rgba(244,114,182,0.12);--radius:10px;--radius-sm:6px;--shadow:0 2px 8px rgba(0,0,0,0.3);--transition:0.2s ease}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);font-size:13px;line-height:1.5;overflow-x:hidden}
+    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+    .header{background:linear-gradient(135deg,#1e2235,#252a40);padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+    .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .logo{display:flex;align-items:center;gap:8px}
+    .logo-icon{width:26px;height:26px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(108,114,255,0.3)}
+    .logo-text{font-weight:700;font-size:13px;letter-spacing:-0.3px}
+    .header-actions{display:flex;gap:2px}
+    .icon-btn{width:28px;height:28px;border:none;background:transparent;color:var(--text-secondary);border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--transition);font-size:15px}
+    .icon-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
+    .email-subject{font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tabs{display:flex;background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:0 6px}
+    .tab{flex:1;padding:9px 6px;border:none;background:none;color:var(--text-muted);font-family:inherit;font-size:11.5px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:var(--transition);text-align:center}
+    .tab:hover{color:var(--text-secondary)}.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .content{padding:12px;height:calc(100vh - 120px);overflow-y:auto}
+    .panel{display:none}.panel.active{display:block}
+    .section{margin-bottom:16px}
+    .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted)}
+    .section-label-standalone{margin-bottom:8px}
+    .inline-add-btn{width:22px;height:22px;border:1px dashed var(--border);background:none;color:var(--text-muted);border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:var(--transition)}
+    .inline-add-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-subtle)}
+    .inline-form{display:none;gap:5px;margin-top:6px;margin-bottom:6px;animation:fadeIn 0.2s ease}
+    .inline-form.visible{display:flex}.inline-form .text-input{font-size:11.5px;padding:5px 9px}
+    .status-selector{display:flex;flex-wrap:wrap;gap:5px}
+    .status-badge{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);font-family:inherit;font-size:11.5px;font-weight:500;cursor:pointer;transition:var(--transition);white-space:nowrap}
+    .status-badge:hover{border-color:var(--text-muted)}
+    .status-badge.active{border-color:var(--accent);background:var(--accent-subtle);color:var(--accent)}
+    .status-badge.active[data-color="success"]{border-color:var(--success);background:var(--success-subtle);color:var(--success)}
+    .status-badge.active[data-color="warning"]{border-color:var(--warning);background:var(--warning-subtle);color:var(--warning)}
+    .status-badge.active[data-color="danger"]{border-color:var(--danger);background:var(--danger-subtle);color:var(--danger)}
+    .status-badge.active[data-color="info"]{border-color:var(--info);background:var(--info-subtle);color:var(--info)}
+    .status-badge.active[data-color="orange"]{border-color:var(--orange);background:var(--orange-subtle);color:var(--orange)}
+    .status-badge.active[data-color="pink"]{border-color:var(--pink);background:var(--pink-subtle);color:var(--pink)}
+    .project-selector{position:relative}
+    .project-search{width:100%;padding:8px 12px;padding-right:32px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:inherit;font-size:12.5px;transition:var(--transition)}
+    .project-search:focus{outline:none;border-color:var(--border-focus)}.project-search::placeholder{color:var(--text-muted)}
+    .project-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:20px;height:20px;border:none;background:none;color:var(--text-muted);cursor:pointer;border-radius:4px;display:none;align-items:center;justify-content:center;font-size:13px}
+    .project-clear.visible{display:flex}.project-clear:hover{color:var(--danger)}
+    .project-dropdown{display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;z-index:50;box-shadow:var(--shadow)}
+    .project-dropdown.open{display:block}
+    .project-option{padding:7px 12px;cursor:pointer;font-size:12px;color:var(--text-secondary);transition:var(--transition);border-bottom:1px solid rgba(53,58,79,0.5)}
+    .project-option:last-child{border-bottom:none}
+    .project-option:hover,.project-option.selected{background:var(--accent-subtle);color:var(--accent)}
+    .project-option-none{font-style:italic;color:var(--text-muted)}
+    .project-no-results{padding:10px 12px;font-size:11px;color:var(--text-muted);text-align:center}
+    .notes-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .note-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px 32px 12px;transition:var(--transition);position:relative;animation:fadeIn 0.25s ease}
+    .note-card:hover{border-color:var(--text-muted)}
+    .note-card.has-event{border-left:3px solid var(--info)}
+    .note-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+    .note-author{font-weight:600;font-size:11.5px;display:flex;align-items:center;gap:5px}
+    .note-author-dot{width:6px;height:6px;border-radius:50%}
+    .note-date{font-size:10px;color:var(--text-muted)}
+    .note-text{font-size:12px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap}
+    .note-event-tag{display:inline-block;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;background:var(--info-subtle);color:var(--info);border:1px solid rgba(96,165,250,0.3);margin-top:5px}
+    .note-actions-bar{display:flex;gap:4px;position:absolute;bottom:8px;right:8px;opacity:0;transition:var(--transition)}
+    .note-card:hover .note-actions-bar{opacity:1}
+    .note-action-btn{width:22px;height:22px;border:none;background:none;color:var(--text-muted);cursor:pointer;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;transition:var(--transition)}
+    .note-action-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
+    .note-action-btn.delete:hover{background:var(--danger-subtle);color:var(--danger)}
+    .note-edit-area{display:none;margin-top:6px}.note-edit-area.visible{display:block}
+    .note-edit-textarea{width:100%;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border-focus);border-radius:var(--radius-sm);color:var(--text-primary);font-family:inherit;font-size:12px;resize:none;min-height:50px;line-height:1.5}
+    .note-edit-textarea:focus{outline:none}.note-edit-actions{display:flex;gap:4px;justify-content:flex-end;margin-top:4px}
+    .author-c0{color:var(--accent)}.author-c0 .note-author-dot{background:var(--accent)}
+    .author-c1{color:var(--success)}.author-c1 .note-author-dot{background:var(--success)}
+    .author-c2{color:var(--orange)}.author-c2 .note-author-dot{background:var(--orange)}
+    .author-c3{color:var(--pink)}.author-c3 .note-author-dot{background:var(--pink)}
+    .author-c4{color:var(--info)}.author-c4 .note-author-dot{background:var(--info)}
+    .note-input-area{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:var(--transition)}
+    .note-input-area:focus-within{border-color:var(--border-focus)}
+    .note-textarea{width:100%;padding:10px 12px;background:transparent;border:none;color:var(--text-primary);font-family:inherit;font-size:12.5px;resize:none;min-height:56px;line-height:1.5}
+    .note-textarea:focus{outline:none}.note-textarea::placeholder{color:var(--text-muted)}
+    .note-input-footer{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-top:1px solid var(--border);background:rgba(0,0,0,0.08)}
+    .note-hint{font-size:10px;color:var(--text-muted)}
+    .btn{padding:6px 14px;border-radius:var(--radius-sm);border:none;font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer;transition:var(--transition);display:inline-flex;align-items:center;gap:4px}
+    .btn-primary{background:var(--accent);color:white}.btn-primary:hover{background:var(--accent-hover)}.btn-primary:disabled{opacity:0.4;cursor:not-allowed}
+    .btn-ghost{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}.btn-ghost:hover{background:var(--bg-hover);color:var(--text-primary)}
+    .btn-sm{padding:4px 10px;font-size:11px}
+    .notes-search{width:100%;padding:7px 11px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:inherit;font-size:12px;transition:var(--transition);margin-bottom:10px}
+    .notes-search:focus{outline:none;border-color:var(--border-focus)}.notes-search::placeholder{color:var(--text-muted)}
+    .email-category{display:inline-block;padding:1px 7px;border-radius:10px;font-size:9px;font-weight:600;margin-left:6px;vertical-align:middle}
+    .email-category.has-project{background:var(--accent-subtle);color:var(--accent);border:1px solid rgba(108,114,255,0.3)}
+    .email-category.has-status{background:var(--warning-subtle);color:var(--warning);border:1px solid rgba(251,191,36,0.3)}
+    .settings-section{margin-bottom:18px}.settings-title{font-size:12.5px;font-weight:600;margin-bottom:8px}
+    .input-row{display:flex;gap:6px;margin-bottom:6px}
+    .text-input{flex:1;padding:7px 11px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:inherit;font-size:12.5px;transition:var(--transition)}
+    .text-input:focus{outline:none;border-color:var(--border-focus)}.text-input::placeholder{color:var(--text-muted)}
+    .editable-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+    .editable-item{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm)}
+    .editable-item:hover{border-color:var(--text-muted)}
+    .editable-item .item-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .editable-item .item-text{flex:1;font-size:12px}
+    .editable-item .remove-btn{width:20px;height:20px;border:none;background:none;color:var(--text-muted);cursor:pointer;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:0;transition:var(--transition)}
+    .editable-item:hover .remove-btn{opacity:1}.editable-item .remove-btn:hover{background:var(--danger-subtle);color:var(--danger)}
+    .color-selector{display:flex;gap:4px;align-items:center}
+    .color-dot{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:var(--transition)}
+    .color-dot:hover,.color-dot.active{border-color:var(--text-primary);transform:scale(1.15)}
+    .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(80px);padding:8px 18px;border-radius:var(--radius);font-size:11.5px;font-weight:600;box-shadow:var(--shadow);z-index:1000;transition:transform 0.3s ease,opacity 0.3s ease;opacity:0;background:var(--success);color:#0f1117}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}.toast.error{background:var(--danger);color:white}
+    .empty-state{text-align:center;padding:20px 16px;color:var(--text-muted)}
+    .empty-state-icon{font-size:24px;margin-bottom:6px;opacity:0.5}.empty-state-text{font-size:11.5px;line-height:1.6}
+    .info-banner{background:var(--accent-subtle);border:1px solid rgba(108,114,255,0.2);border-radius:var(--radius-sm);padding:8px 11px;font-size:11px;color:var(--accent);margin-bottom:12px;line-height:1.5}
+    .summary-strip{display:flex;gap:8px;margin-bottom:14px}
+    .summary-card{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px;text-align:center}
+    .summary-card .num{font-size:20px;font-weight:700;color:var(--accent)}.summary-card .label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px}
+    .note-event-form{display:none;margin-top:8px;padding:8px;background:var(--bg-input);border-radius:var(--radius-sm);border:1px solid var(--border-focus);animation:fadeIn 0.2s ease}
+    .note-event-form.visible{display:block}
+    .event-form-title{font-size:11px;font-weight:600;color:var(--accent);margin-bottom:6px}
+    .event-form-row{display:flex;gap:6px;margin-bottom:6px}
+    .event-input{flex:1;padding:6px 8px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:inherit;font-size:11.5px}
+    .event-input:focus{outline:none;border-color:var(--border-focus)}
+    .event-input::-webkit-calendar-picker-indicator{filter:invert(0.7)}
+    /* Responsable field */
+    .responsable-section{display:flex;align-items:center;gap:6px}
+    .responsable-display{flex:1;padding:6px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;color:var(--text-secondary);min-height:30px;display:flex;align-items:center}
+    .responsable-display.assigned{color:var(--info);border-color:rgba(96,165,250,0.3)}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top">
+    <div class="logo"><div class="logo-icon">📋</div><span class="logo-text">Email Manager Pro</span></div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="manualSyncTags()" title="Sincronizar etiquetas">🏷</button>
+      <button class="icon-btn" onclick="refreshData()" title="Actualizar">↻</button>
+      <button class="icon-btn" onclick="switchTab('settings')" title="Configuración">⚙</button>
+    </div>
+  </div>
+  <div class="email-subject" id="emailSubject">Cargando...</div>
+</div>
+<div class="tabs">
+  <button class="tab active" data-tab="main" onclick="switchTab('main')">📌 Principal</button>
+  <button class="tab" data-tab="notes" onclick="switchTab('notes')">💬 Notas</button>
+  <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙ Config</button>
+</div>
+<div class="content">
+  <!-- MAIN -->
+  <div class="panel active" id="panel-main">
+    <div class="summary-strip">
+      <div class="summary-card"><div class="num" id="noteCount">0</div><div class="label">Notas</div></div>
+      <div class="summary-card"><div class="num" id="currentStatusDisplay">—</div><div class="label">Estado</div></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><div class="section-label">Estado</div>
+        <button class="inline-add-btn" onclick="toggleInlineForm('statusInline')" title="Agregar estado">+</button></div>
+      <div class="status-selector" id="statusContainer"></div>
+      <div class="inline-form" id="statusInline">
+        <input type="text" class="text-input" id="inlineStatusName" placeholder="Nuevo estado..." onkeydown="if(event.key==='Enter')inlineAddStatus()"/>
+        <button class="btn btn-primary btn-sm" onclick="inlineAddStatus()">+</button></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><div class="section-label">Proyecto asociado</div>
+        <button class="inline-add-btn" onclick="toggleInlineForm('projectInline')" title="Agregar proyecto">+</button></div>
+      <div class="project-selector">
+        <input type="text" class="project-search" id="projectSearch" placeholder="Buscar proyecto..." onfocus="openProjectDropdown()" oninput="filterProjects()" onkeydown="projectSearchKey(event)"/>
+        <button class="project-clear" id="projectClear" onclick="clearProject()">✕</button>
+        <div class="project-dropdown" id="projectDropdown"></div>
+      </div>
+      <div class="inline-form" id="projectInline">
+        <input type="text" class="text-input" id="inlineProjectName" placeholder="Nuevo proyecto..." onkeydown="if(event.key==='Enter')inlineAddProject()"/>
+        <button class="btn btn-primary btn-sm" onclick="inlineAddProject()">+</button></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><div class="section-label">Responsable / Asignado</div></div>
+      <div class="responsable-section">
+        <input type="text" class="text-input" id="responsableInput" placeholder="Nombre del responsable..." onkeydown="if(event.key==='Enter')saveResponsable()" style="font-size:12px;padding:6px 10px;"/>
+        <button class="btn btn-primary btn-sm" onclick="saveResponsable()">✓</button>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-label section-label-standalone">Nota rápida</div>
+      <div class="note-input-area">
+        <textarea class="note-textarea" id="quickNote" placeholder="Escribe una nota rápida..." rows="2" onkeydown="noteKeyDown(event,'quickNote')"></textarea>
+        <div class="note-input-footer"><span class="note-hint">Ctrl+Enter para guardar</span>
+          <button class="btn btn-primary btn-sm" onclick="addNote('quickNote')">Guardar</button></div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-label section-label-standalone">Últimas notas</div>
+      <div id="recentNotes"></div>
+    </div>
+  </div>
+  <!-- NOTES -->
+  <div class="panel" id="panel-notes">
+    <div class="section">
+      <div class="section-header"><div class="section-label">Todas las notas</div>
+        <button class="btn btn-ghost btn-sm" onclick="exportNotes()" title="Exportar">📥 Exportar</button></div>
+      <input type="text" class="notes-search" id="notesSearch" placeholder="Filtrar notas..." oninput="renderNotes()"/>
+      <div class="notes-list" id="allNotes"></div>
+    </div>
+    <div class="section">
+      <div class="section-label section-label-standalone">Agregar nota</div>
+      <div class="note-input-area">
+        <textarea class="note-textarea" id="fullNote" placeholder="Escribe tu nota aquí..." rows="4" onkeydown="noteKeyDown(event,'fullNote')"></textarea>
+        <div class="note-input-footer"><span class="note-hint">Ctrl+Enter para guardar</span>
+          <button class="btn btn-primary btn-sm" onclick="addNote('fullNote')">Guardar nota</button></div>
+      </div>
+    </div>
+  </div>
+  <!-- SETTINGS -->
+  <div class="panel" id="panel-settings">
+    <div class="info-banner">La configuración se guarda en tu navegador. Cada miembro del equipo configura su nombre la primera vez.</div>
+    <div class="settings-section"><div class="settings-title">👤 Tu nombre (para las notas)</div>
+      <div class="input-row"><input type="text" class="text-input" id="authorName" placeholder="Ej: Carlos, Ana, etc."/>
+        <button class="btn btn-primary btn-sm" onclick="saveAuthorName()">Guardar</button></div></div>
+    <div class="settings-section"><div class="settings-title">🏷️ Estados personalizados</div>
+      <div class="editable-list" id="statusList"></div>
+      <div class="input-row"><input type="text" class="text-input" id="newStatusName" placeholder="Nombre del estado"/>
+        <div class="color-selector" id="colorSelector"></div>
+        <button class="btn btn-primary btn-sm" onclick="addStatus()">+</button></div></div>
+    <div class="settings-section"><div class="settings-title">📁 Proyectos</div>
+      <div class="editable-list" id="projectList"></div>
+      <div class="input-row"><input type="text" class="text-input" id="newProjectName" placeholder="Nombre del proyecto"/>
+        <button class="btn btn-primary btn-sm" onclick="addProject()">+</button></div>
+      <div style="margin-top:8px"><div class="section-label section-label-standalone">Pegar lista de proyectos (uno por línea)</div>
+        <textarea class="note-textarea" id="bulkProjects" placeholder="CCP-0031 GOLF CLUB RD&#10;CCP-0045 MAIN ST" rows="4" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px"></textarea>
+        <button class="btn btn-ghost btn-sm" onclick="bulkAddProjects()">Importar lista</button></div></div>
+    <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px">
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:rgba(248,113,113,0.3)" onclick="resetAll()">Restablecer todo</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_PREFIX='emp_';
+const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
+const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
+const CAT_NOTAS='EMP Notas';
+let selectedColor='accent',mailItem=null,customProperties=null,officeReady=false;
+
+function lsGet(k,fb){try{const v=localStorage.getItem(STORAGE_PREFIX+k);return v?JSON.parse(v):fb}catch{return fb}}
+function lsSet(k,v){try{localStorage.setItem(STORAGE_PREFIX+k,JSON.stringify(v))}catch{}}
+function getAuthor(){return lsGet('author','')||'Anónimo'}
+function getStatuses(){return lsGet('statuses',DEFAULT_STATUSES)}
+function getProjects(){return lsGet('projects',[]).sort((a,b)=>a.localeCompare(b))}
+
+function getEmailData(){
+  if(!customProperties)return{status:'',project:'',responsable:'',notes:[]};
+  try{const r=customProperties.get('EMP_Data');if(!r)return{status:'',project:'',responsable:'',notes:[]};const d=JSON.parse(r);if(!d.responsable)d.responsable='';return d}
+  catch{return{status:'',project:'',responsable:'',notes:[]}}
+}
+function setEmailData(data,cb){
+  if(!customProperties){showToast('Abre un email primero',true);return}
+  try{customProperties.set('EMP_Data',JSON.stringify(data));
+    customProperties.saveAsync(function(r){if(r.status===Office.AsyncResultStatus.Succeeded){if(cb)cb()}else showToast('Error: '+(r.error?r.error.message:''),true)})
+  }catch(e){showToast('Error: '+e.message,true)}
+}
+function loadCustomProperties(cb){
+  if(!mailItem)return;
+  try{mailItem.loadCustomPropertiesAsync(function(r){if(r.status===Office.AsyncResultStatus.Succeeded){customProperties=r.value;if(cb)cb()}else showToast('Error cargando',true)})}
+  catch(e){showToast('Error: '+e.message,true)}
+}
+
+// ── Office Init ──
+Office.onReady(function(info){
+  if(info.host===Office.HostType.Outlook){
+    officeReady=true;mailItem=Office.context.mailbox.item;
+    document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
+    loadCustomProperties(function(){renderAll();updateHeaderTags()});
+    try{Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged,onItemChanged)}catch(e){}
+    ensureMasterCategory();
+  }else{document.getElementById('emailSubject').textContent='Vista previa';renderAll()}
+});
+setTimeout(function(){if(!officeReady){document.getElementById('emailSubject').textContent='Vista previa';renderAll()}},3000);
+
+function onItemChanged(){
+  mailItem=Office.context.mailbox.item;if(!mailItem)return;
+  document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
+  customProperties=null;loadCustomProperties(function(){renderAll();updateHeaderTags()})
+}
+
+// ── Categories ──
+function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z]{2,5}-\d{3,5}/);return m?m[0].toUpperCase():null}
+
+function ensureMasterCategory(){
+  try{Office.context.mailbox.masterCategories.getAsync(function(r){
+    if(r.status!==Office.AsyncResultStatus.Succeeded)return;
+    const names=r.value.map(c=>c.displayName);
+    if(names.indexOf(CAT_NOTAS)<0)Office.context.mailbox.masterCategories.addAsync([{displayName:CAT_NOTAS,color:Office.MailboxEnums.CategoryColor.Preset9}],function(){})
+  })}catch(e){}
+}
+function ensureProjectCat(pid,cb){
+  if(!pid){if(cb)cb();return}
+  try{Office.context.mailbox.masterCategories.getAsync(function(r){
+    if(r.status!==Office.AsyncResultStatus.Succeeded){if(cb)cb();return}
+    if(!r.value.some(c=>c.displayName===pid))Office.context.mailbox.masterCategories.addAsync([{displayName:pid,color:Office.MailboxEnums.CategoryColor.Preset7}],function(){if(cb)cb()});
+    else{if(cb)cb()}
+  })}catch(e){if(cb)cb()}
+}
+function syncCategories(oldProject){
+  if(!mailItem||!mailItem.categories)return;
+  try{const d=getEmailData();const hasNotas=d.notes&&d.notes.length>0;
+    const newPid=extractProjectId(d.project);const oldPid=oldProject!==undefined?extractProjectId(oldProject):null;
+    mailItem.categories.getAsync(function(r){if(r.status!==Office.AsyncResultStatus.Succeeded)return;
+      const cur=r.value.map(c=>c.displayName);const toAdd=[],toRm=[];
+      if(hasNotas&&cur.indexOf(CAT_NOTAS)<0)toAdd.push(CAT_NOTAS);
+      if(!hasNotas&&cur.indexOf(CAT_NOTAS)>=0)toRm.push(CAT_NOTAS);
+      if(oldPid&&oldPid!==newPid&&cur.indexOf(oldPid)>=0)toRm.push(oldPid);
+      if(newPid&&cur.indexOf(newPid)<0)toAdd.push(newPid);
+      if(toRm.length)mailItem.categories.removeAsync(toRm,function(){if(toAdd.length)addCatsEnsure(toAdd)});
+      else if(toAdd.length)addCatsEnsure(toAdd)
+    })
+  }catch(e){}
+}
+function addCatsEnsure(cats){
+  const pc=cats.filter(c=>c!==CAT_NOTAS);
+  if(pc.length)ensureProjectCat(pc[0],function(){try{mailItem.categories.addAsync(cats,function(){})}catch(e){}});
+  else try{mailItem.categories.addAsync(cats,function(){})}catch(e){}
+}
+function manualSyncTags(){syncCategories();showToast('Etiquetas sincronizadas')}
+
+// ── Render ──
+function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();updateSummary()}
+function renderStatuses(){
+  const c=document.getElementById('statusContainer'),ss=getStatuses(),d=getEmailData();
+  c.innerHTML=ss.map(s=>`<button class="status-badge ${d.status===s.name?'active':''}" data-color="${s.color}" onclick="toggleStatus('${esc(s.name)}')">${esc(s.name)}</button>`).join('')
+}
+function renderProjectSearch(){
+  const d=getEmailData(),si=document.getElementById('projectSearch'),cb=document.getElementById('projectClear');
+  if(d.project){si.value=d.project;cb.classList.add('visible')}else{si.value='';cb.classList.remove('visible')}
+}
+function renderResponsable(){
+  const d=getEmailData();document.getElementById('responsableInput').value=d.responsable||''
+}
+function renderNotes(){
+  const d=getEmailData(),notes=d.notes||[];
+  const sq=((document.getElementById('notesSearch')||{}).value||'').toLowerCase();
+  const recentEl=document.getElementById('recentNotes');
+  if(!notes.length)recentEl.innerHTML='<div class="empty-state"><div class="empty-state-icon">📝</div><div class="empty-state-text">No hay notas aún.</div></div>';
+  else{recentEl.innerHTML='<div class="notes-list">'+notes.slice(-3).reverse().map((n,i)=>noteCardHTML(n,notes.length-1-i)).join('')+'</div>';
+    if(notes.length>3)recentEl.innerHTML+=`<div style="text-align:center;margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="switchTab('notes')">Ver todas (${notes.length})</button></div>`}
+  const allEl=document.getElementById('allNotes');
+  const filtered=sq?notes.filter(n=>n.text.toLowerCase().includes(sq)||n.author.toLowerCase().includes(sq)):notes;
+  if(!filtered.length)allEl.innerHTML=sq?'<div class="empty-state"><div class="empty-state-text">Sin resultados.</div></div>':'<div class="empty-state"><div class="empty-state-icon">📝</div><div class="empty-state-text">Sin notas.</div></div>';
+  else allEl.innerHTML=filtered.slice().reverse().map(n=>{const ri=notes.indexOf(n);return noteCardHTML(n,ri)}).join('')
+}
+function noteCardHTML(note,ri){
+  const cc='author-c'+(simpleHash(note.author)%5);
+  const today=new Date();const dd=today.toISOString().slice(0,10);const tt=String(today.getHours()+1).padStart(2,'0')+':00';
+  const hasEv=note.eventDate?true:false;
+  return `<div class="note-card${hasEv?' has-event':''}" id="note-${ri}">
+    <div class="note-header"><div class="note-author ${cc}"><span class="note-author-dot"></span>${esc(note.author)}</div><span class="note-date">${esc(note.date)}</span></div>
+    <div class="note-text" id="noteText-${ri}">${esc(note.text)}</div>
+    ${hasEv?`<div class="note-event-tag">📅 Evento: ${esc(note.eventDate)}</div>`:''}
+    <div class="note-actions-bar">
+      <button class="note-action-btn" onclick="toggleEventForm(${ri})" title="Crear evento">📅</button>
+      <button class="note-action-btn" onclick="startEditNote(${ri})" title="Editar">✏</button>
+      <button class="note-action-btn delete" onclick="deleteNote(${ri})" title="Eliminar">✕</button></div>
+    <div class="note-edit-area" id="noteEdit-${ri}">
+      <textarea class="note-edit-textarea" id="noteEditText-${ri}" onkeydown="editNoteKey(event,${ri})">${esc(note.text)}</textarea>
+      <div class="note-edit-actions"><button class="btn btn-ghost btn-sm" onclick="cancelEditNote(${ri})">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="saveEditNote(${ri})">Guardar</button></div></div>
+    <div class="note-event-form" id="noteEvent-${ri}">
+      <div class="event-form-title">📅 Crear evento en calendario</div>
+      <div class="event-form-row"><label style="font-size:11px;color:var(--text-muted);min-width:50px">Fecha</label><input type="date" class="event-input" id="evDate-${ri}" value="${dd}"/></div>
+      <div class="event-form-row"><label style="font-size:11px;color:var(--text-muted);min-width:50px">Hora</label><input type="time" class="event-input" id="evTime-${ri}" value="${tt}"/></div>
+      <div class="event-form-row"><label style="font-size:11px;color:var(--text-muted);min-width:50px">Duración</label><select class="event-input" id="evDur-${ri}"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 hora</option><option value="90">1.5 horas</option><option value="120">2 horas</option></select></div>
+      <div class="event-form-row" style="justify-content:flex-end;gap:4px"><button class="btn btn-ghost btn-sm" onclick="toggleEventForm(${ri})">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="createCalendarEvent(${ri})">Crear evento</button></div>
+    </div>
+  </div>`
+}
+function updateSummary(){
+  const d=getEmailData();document.getElementById('noteCount').textContent=(d.notes||[]).length;
+  const sd=document.getElementById('currentStatusDisplay');sd.textContent=d.status||'—';sd.style.fontSize=d.status?'13px':'20px'
+}
+function updateHeaderTags(){
+  const d=getEmailData(),el=document.getElementById('emailSubject');
+  el.querySelectorAll('.email-category').forEach(e=>e.remove());
+  if(d.project){const t=document.createElement('span');t.className='email-category has-project';t.textContent=extractProjectId(d.project)||d.project;el.appendChild(t)}
+  if(d.status){const t=document.createElement('span');t.className='email-category has-status';t.textContent=d.status;el.appendChild(t)}
+}
+function renderSettings(){
+  document.getElementById('authorName').value=lsGet('author','');
+  document.getElementById('colorSelector').innerHTML=COLORS.map(c=>`<div class="color-dot ${selectedColor===c.name?'active':''}" style="background:${c.hex}" onclick="pickColor('${c.name}')"></div>`).join('');
+  const ss=getStatuses();document.getElementById('statusList').innerHTML=ss.map((s,i)=>`<div class="editable-item"><div class="item-dot" style="background:var(--${s.color})"></div><span class="item-text">${esc(s.name)}</span><button class="remove-btn" onclick="removeStatus(${i})">✕</button></div>`).join('');
+  const pp=getProjects();document.getElementById('projectList').innerHTML=!pp.length?'<div class="empty-state"><div class="empty-state-text" style="font-size:11px">Agrega proyectos o pega una lista.</div></div>':pp.map((p,i)=>`<div class="editable-item"><span class="item-text">${esc(p)}</span><button class="remove-btn" onclick="removeProject(${i})">✕</button></div>`).join('')
+}
+
+// ── Project Dropdown ──
+function openProjectDropdown(){filterProjects();document.getElementById('projectDropdown').classList.add('open')}
+function closeProjectDropdown(){setTimeout(()=>document.getElementById('projectDropdown').classList.remove('open'),150)}
+function filterProjects(){
+  const q=document.getElementById('projectSearch').value.toLowerCase(),pp=getProjects(),d=getEmailData(),dd=document.getElementById('projectDropdown');
+  const f=pp.filter(p=>p.toLowerCase().includes(q));
+  let h=`<div class="project-option project-option-none" onclick="selectProject('')">— Sin proyecto —</div>`;
+  if(!f.length&&q)h+=`<div class="project-no-results">No se encontró "${esc(q)}"</div>`;
+  else h+=f.map(p=>`<div class="project-option ${d.project===p?'selected':''}" onclick="selectProject('${esc(p)}')">${esc(p)}</div>`).join('');
+  dd.innerHTML=h
+}
+function selectProject(name){
+  const d=getEmailData();const old=d.project;d.project=name;
+  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);showToast(name?'Proyecto: '+name:'Proyecto removido')});
+  document.getElementById('projectDropdown').classList.remove('open')
+}
+function clearProject(){selectProject('')}
+function projectSearchKey(e){
+  if(e.key==='Escape'){closeProjectDropdown();document.getElementById('projectSearch').blur()}
+  else if(e.key==='Enter'){const q=document.getElementById('projectSearch').value.toLowerCase(),m=getProjects().find(p=>p.toLowerCase().includes(q));if(m)selectProject(m)}
+}
+document.addEventListener('click',function(e){if(!e.target.closest('.project-selector'))document.getElementById('projectDropdown').classList.remove('open')});
+
+// ── Actions ──
+function toggleStatus(name){const d=getEmailData();d.status=(d.status===name)?'':name;setEmailData(d,function(){renderStatuses();updateSummary();updateHeaderTags();showToast(d.status?'Estado: '+d.status:'Estado removido')})}
+function saveResponsable(){
+  const v=document.getElementById('responsableInput').value.trim();
+  const d=getEmailData();d.responsable=v;
+  setEmailData(d,function(){showToast(v?'Responsable: '+v:'Responsable removido')})
+}
+function noteKeyDown(e,id){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();addNote(id)}}
+function addNote(tid){
+  const ta=document.getElementById(tid),txt=ta.value.trim();if(!txt)return;
+  const author=getAuthor();if(author==='Anónimo'){showToast('Configura tu nombre en ⚙ Config',true);return}
+  const d=getEmailData();if(!d.notes)d.notes=[];
+  d.notes.push({author,text:txt,date:new Date().toLocaleString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})});
+  setEmailData(d,function(){ta.value='';renderNotes();updateSummary();syncCategories();showToast('Nota guardada')})
+}
+function deleteNote(i){const d=getEmailData();if(!d.notes||!d.notes[i])return;d.notes.splice(i,1);setEmailData(d,function(){renderNotes();updateSummary();syncCategories();showToast('Nota eliminada')})}
+
+function startEditNote(i){const el=document.getElementById('noteEdit-'+i);if(!el)return;el.classList.add('visible');document.getElementById('noteText-'+i).style.display='none';const ta=document.getElementById('noteEditText-'+i);ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length)}
+function cancelEditNote(i){const el=document.getElementById('noteEdit-'+i);if(el)el.classList.remove('visible');document.getElementById('noteText-'+i).style.display=''}
+function saveEditNote(i){const t=document.getElementById('noteEditText-'+i).value.trim();if(!t){showToast('Vacía',true);return}const d=getEmailData();if(!d.notes||!d.notes[i])return;d.notes[i].text=t;d.notes[i].date=d.notes[i].date.replace(/ \(editado\)/,'')+' (editado)';setEmailData(d,function(){renderNotes();syncCategories();showToast('Nota editada')})}
+function editNoteKey(e,i){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();saveEditNote(i)}if(e.key==='Escape')cancelEditNote(i)}
+
+// ── Calendar Events ──
+function toggleEventForm(i){const el=document.getElementById('noteEvent-'+i);if(!el)return;const v=el.classList.contains('visible');document.querySelectorAll('.note-event-form').forEach(f=>f.classList.remove('visible'));if(!v)el.classList.add('visible')}
+
+function createCalendarEvent(i){
+  const d=getEmailData();if(!d.notes||!d.notes[i]){showToast('Nota no encontrada',true);return}
+  const note=d.notes[i];
+  const dv=document.getElementById('evDate-'+i).value;
+  const tv=document.getElementById('evTime-'+i).value;
+  const dur=parseInt(document.getElementById('evDur-'+i).value)||30;
+  if(!dv||!tv){showToast('Selecciona fecha y hora',true);return}
+  const start=new Date(dv+'T'+tv+':00');const end=new Date(start.getTime()+dur*60000);
+  const pid=extractProjectId(d.project);
+  const emailTitle = mailItem ? mailItem.subject : 'Email';
+  const shortNote = note.text.length > 50 ? note.text.substring(0, 50) + '...' : note.text;
+  const subj = (pid ? '[' + pid + '] ' : '') + 'Seg. Email: ' + shortNote;
+  const body = 'Email Original: ' + emailTitle + '\n\nNota de ' + note.author + ' (' + note.date + '):\n\n' + note.text + (d.project ? '\n\nProyecto: ' + d.project : '') + (d.responsable ? '\nResponsable: ' + d.responsable : '');
+
+  // Build deep link URL as primary method for Outlook Web
+  var calUrl='https://outlook.office.com/calendar/0/deeplink/compose?subject='+encodeURIComponent(subj)+'&startdt='+encodeURIComponent(start.toISOString())+'&enddt='+encodeURIComponent(end.toISOString())+'&body='+encodeURIComponent(body)+'&path=%2Fcalendar%2Faction%2Fcompose';
+
+  // Try displayNewAppointmentForm first (works in desktop Outlook)
+  var created=false;
+  try{
+    if(Office.context.mailbox&&Office.context.mailbox.displayNewAppointmentForm){
+      Office.context.mailbox.displayNewAppointmentForm({
+        start:start,
+        end:end,
+        subject:subj,
+        body:body
+      });
+      created=true;
+    }
+  }catch(e){created=false}
+
+  // If Office.js method didn't work, use openBrowserWindow or direct navigation
+  if(!created){
+    try{
+      if(Office.context.ui&&Office.context.ui.openBrowserWindow){
+        Office.context.ui.openBrowserWindow(calUrl);
+        created=true;
+      }
+    }catch(e2){created=false}
+  }
+
+  // Last resort: direct link in parent window
+  if(!created){
+    try{window.top.location.href=calUrl;created=true}catch(e3){}
+  }
+  if(!created){
+    try{window.open(calUrl,'_blank');created=true}catch(e4){}
+  }
+
+  // Mark the note with event info regardless
+  markNoteWithEvent(i,dv,tv);
+  if(!created)showToast('Abre manualmente: '+calUrl,true);
+}
+
+function markNoteWithEvent(i,dateStr,timeStr){
+  const d=getEmailData();if(!d.notes||!d.notes[i])return;
+  d.notes[i].eventDate=dateStr+' '+timeStr;
+  setEmailData(d,function(){renderNotes();showToast('Evento creado: '+dateStr+' '+timeStr)})
+}
+
+// ── Export ──
+function exportNotes(){
+  const d=getEmailData(),notes=d.notes||[];if(!notes.length){showToast('Sin notas',true);return}
+  const subj=mailItem?mailItem.subject:'Email';const pid=extractProjectId(d.project);
+  let txt=`Notas de: ${subj}\nProyecto: ${d.project||'Sin proyecto'}\nEstado: ${d.status||'Sin estado'}\nResponsable: ${d.responsable||'Sin asignar'}\n${'─'.repeat(40)}\n\n`;
+  notes.forEach(n=>{txt+=`[${n.date}] ${n.author}:${n.eventDate?' 📅'+n.eventDate:''}\n${n.text}\n\n`});
+  const blob=new Blob([txt],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);
+  const fn=pid?pid+'_notas.txt':'notas-email.txt';
+  const a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);showToast('Exportado: '+fn)
+}
+
+// ── Inline Add ──
+function toggleInlineForm(id){const f=document.getElementById(id),v=f.classList.contains('visible');document.querySelectorAll('.inline-form').forEach(x=>x.classList.remove('visible'));if(!v){f.classList.add('visible');f.querySelector('input').focus()}}
+function inlineAddStatus(){const inp=document.getElementById('inlineStatusName'),n=inp.value.trim();if(!n)return;const ss=getStatuses();if(ss.some(s=>s.name.toLowerCase()===n.toLowerCase())){showToast('Ya existe',true);return}ss.push({name:n,color:'accent'});lsSet('statuses',ss);inp.value='';document.getElementById('statusInline').classList.remove('visible');renderStatuses();renderSettings();showToast('Estado: '+n)}
+function inlineAddProject(){
+  const inp=document.getElementById('inlineProjectName'),n=inp.value.trim().toUpperCase();if(!n)return;
+  const pp=getProjects();if(pp.some(p=>p.toUpperCase()===n)){showToast('Ya existe',true);return}
+  pp.push(n);pp.sort((a,b)=>a.localeCompare(b));lsSet('projects',pp);inp.value='';
+  document.getElementById('projectInline').classList.remove('visible');
+  // Auto-select the new project
+  const d=getEmailData();const old=d.project;d.project=n;
+  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);renderSettings();showToast('Proyecto: '+n)})
+}
+
+// ── Settings ──
+function saveAuthorName(){const n=document.getElementById('authorName').value.trim();if(!n)return;lsSet('author',n);showToast('Nombre: '+n)}
+function pickColor(n){selectedColor=n;renderSettings()}
+function addStatus(){const inp=document.getElementById('newStatusName'),n=inp.value.trim();if(!n)return;const ss=getStatuses();if(ss.some(s=>s.name.toLowerCase()===n.toLowerCase())){showToast('Ya existe',true);return}ss.push({name:n,color:selectedColor});lsSet('statuses',ss);inp.value='';renderSettings();renderStatuses();showToast('Estado agregado')}
+function removeStatus(i){const ss=getStatuses();ss.splice(i,1);lsSet('statuses',ss);renderSettings();renderStatuses()}
+function addProject(){
+  const inp=document.getElementById('newProjectName'),n=inp.value.trim().toUpperCase();if(!n)return;
+  const pp=getProjects();if(pp.some(p=>p.toUpperCase()===n)){showToast('Ya existe',true);return}
+  pp.push(n);pp.sort((a,b)=>a.localeCompare(b));lsSet('projects',pp);inp.value='';renderSettings();renderProjectSearch();showToast('Proyecto agregado')
+}
+function removeProject(i){const pp=getProjects();pp.splice(i,1);lsSet('projects',pp);renderSettings();renderProjectSearch()}
+function bulkAddProjects(){
+  const ta=document.getElementById('bulkProjects'),ls=ta.value.split('\n').map(l=>l.trim().toUpperCase()).filter(l=>l);if(!ls.length)return;
+  const pp=getProjects();let a=0;ls.forEach(n=>{if(!pp.some(p=>p.toUpperCase()===n)){pp.push(n);a++}});
+  pp.sort((x,y)=>x.localeCompare(y));lsSet('projects',pp);ta.value='';renderSettings();renderProjectSearch();showToast(a+' proyecto(s) importado(s)')
+}
+function resetAll(){if(!confirm('¿Borrar configuración local?'))return;localStorage.removeItem(STORAGE_PREFIX+'author');localStorage.removeItem(STORAGE_PREFIX+'statuses');localStorage.removeItem(STORAGE_PREFIX+'projects');renderAll();showToast('Restablecido')}
+function refreshData(){loadCustomProperties(function(){renderAll();updateHeaderTags()});showToast('Actualizado')}
+
+// ── UI ──
+function switchTab(n){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===n));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+n));if(n==='settings')renderSettings()}
+function showToast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' error':'');clearTimeout(el._t);el._t=setTimeout(()=>{el.className='toast'},2500)}
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+function simpleHash(s){let h=0;for(let i=0;i<(s||'').length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0}return Math.abs(h)}
+</script>
+</body>
+</html>
