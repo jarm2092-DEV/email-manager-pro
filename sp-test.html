@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Test SharePoint</title>
+  <title>Test SharePoint via Graph</title>
   <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -18,8 +18,8 @@
   </style>
 </head>
 <body>
-<h1>Test Conexion SharePoint</h1>
-<p>Prueba de autenticacion y acceso a listas.</p>
+<h1>Test Conexion SharePoint via Graph</h1>
+<p>Usa Microsoft Graph API para acceder a SharePoint.</p>
 <div>
   <button class="btn btn-blue" onclick="doLogin()">1. Iniciar sesion</button>
   <button class="btn btn-green" onclick="readProjects()">2. Leer proyectos</button>
@@ -34,19 +34,23 @@ function addLog(msg,cls){logEl.innerHTML+='<span class="'+(cls||'')+'">'+msg+'</
 
 var CLIENT_ID='fab38841-9eea-43ec-90e7-dcde9dfec093';
 var TENANT_ID='bab53ead-1cca-4e29-882d-60236ad916f6';
-var SP_SITE='https://avpconsultinginc.sharepoint.com/sites/CODECLEARPERMIT';
+var GRAPH='https://graph.microsoft.com/v1.0';
+var SP_HOST='avpconsultinginc.sharepoint.com';
+var SP_SITE_PATH='/sites/CODECLEARPERMIT';
 var LIST_PROJECTS='Lista de seguimiento de progreso';
 var LIST_SEGUIMIENTO='Seguimiento de Emails';
 
 var msalApp=null;
 var accessToken=null;
+var siteId=null;
+var listProjectsId=null;
+var listSeguimientoId=null;
 
 // Init MSAL
 try{
-  if(typeof msal==='undefined'){
-    addLog('ERROR: msal library not loaded from CDN','err');
-  } else {
-    addLog('MSAL library loaded OK','ok');
+  if(typeof msal==='undefined'){addLog('ERROR: msal not loaded','err')}
+  else{
+    addLog('MSAL loaded OK','ok');
     msalApp=new msal.PublicClientApplication({
       auth:{
         clientId:CLIENT_ID,
@@ -55,87 +59,132 @@ try{
       },
       cache:{cacheLocation:'sessionStorage'}
     });
-    addLog('MSAL app created OK','ok');
+    addLog('MSAL app created','ok');
   }
-}catch(e){
-  addLog('MSAL init error: '+e.message,'err');
-}
+}catch(e){addLog('MSAL init error: '+e.message,'err')}
+
+var GRAPH_SCOPES=['https://graph.microsoft.com/Sites.Read.All','https://graph.microsoft.com/Sites.ReadWrite.All'];
 
 async function doLogin(){
   if(!msalApp){addLog('MSAL not ready','err');return}
-  addLog('---LOGIN---','info');
-
+  addLog('--- LOGIN ---','info');
   try{
     var accounts=msalApp.getAllAccounts();
-    addLog('Existing accounts: '+accounts.length);
-
+    addLog('Cuentas existentes: '+accounts.length);
     if(accounts.length>0){
-      addLog('Found: '+accounts[0].username,'ok');
+      addLog('Cuenta: '+accounts[0].username,'ok');
       try{
-        var sr=await msalApp.acquireTokenSilent({scopes:[SP_SITE+'/.default'],account:accounts[0]});
+        var sr=await msalApp.acquireTokenSilent({scopes:GRAPH_SCOPES,account:accounts[0]});
         accessToken=sr.accessToken;
-        addLog('Silent token OK (len='+accessToken.length+')','ok');
+        addLog('Token silencioso OK ('+accessToken.length+' chars)','ok');
+        await getSiteId();
         return;
-      }catch(se){addLog('Silent failed: '+se.message+', trying popup...','warn')}
+      }catch(se){addLog('Silent fallo: '+se.message,'warn')}
     }
-
-    addLog('Opening login popup...','info');
-    var lr=await msalApp.loginPopup({scopes:[SP_SITE+'/.default']});
+    addLog('Abriendo popup de login...','info');
+    var lr=await msalApp.loginPopup({scopes:GRAPH_SCOPES});
     addLog('Login OK: '+lr.account.username,'ok');
-
-    var tr=await msalApp.acquireTokenSilent({scopes:[SP_SITE+'/.default'],account:lr.account});
+    var tr=await msalApp.acquireTokenSilent({scopes:GRAPH_SCOPES,account:lr.account});
     accessToken=tr.accessToken;
-    addLog('Token OK (len='+accessToken.length+')','ok');
+    addLog('Token OK ('+accessToken.length+' chars)','ok');
+    await getSiteId();
   }catch(e){
     addLog('Login error: '+e.message,'err');
-    if(e.message.indexOf('popup')>=0) addLog('TIP: Allow popups for this site','warn');
+    if(e.message.indexOf('popup')>=0)addLog('TIP: Permite popups para este sitio','warn');
+    if(e.message.indexOf('consent')>=0||e.message.indexOf('AADSTS65001')>=0){
+      addLog('TIP: Necesitas consentimiento. Intenta con scopes basicos...','warn');
+      try{
+        var lr2=await msalApp.loginPopup({scopes:['User.Read']});
+        addLog('Login basico OK: '+lr2.account.username,'ok');
+        var tr2=await msalApp.acquireTokenSilent({scopes:GRAPH_SCOPES,account:lr2.account});
+        accessToken=tr2.accessToken;
+        addLog('Token con Graph scopes OK','ok');
+        await getSiteId();
+      }catch(e2){addLog('Fallback error: '+e2.message,'err')}
+    }
   }
 }
 
-async function spGet(url){
-  if(!accessToken){addLog('Login first','err');return null}
+async function graphGet(url){
+  if(!accessToken){addLog('Inicia sesion primero','err');return null}
   try{
-    var r=await fetch(url,{headers:{'Authorization':'Bearer '+accessToken,'Accept':'application/json;odata=verbose'}});
-    if(!r.ok){var t=await r.text();addLog('HTTP '+r.status+': '+t.substring(0,200),'err');return null}
+    var r=await fetch(url,{headers:{'Authorization':'Bearer '+accessToken,'Accept':'application/json'}});
+    if(!r.ok){var t=await r.text();addLog('HTTP '+r.status+': '+t.substring(0,300),'err');return null}
     return await r.json();
-  }catch(e){addLog('Fetch err: '+e.message,'err');return null}
+  }catch(e){addLog('Fetch error: '+e.message,'err');return null}
+}
+
+async function getSiteId(){
+  addLog('Obteniendo Site ID...','info');
+  var d=await graphGet(GRAPH+'/sites/'+SP_HOST+':'+SP_SITE_PATH);
+  if(d&&d.id){
+    siteId=d.id;
+    addLog('Site ID: '+siteId,'ok');
+    // Get list IDs
+    var lists=await graphGet(GRAPH+'/sites/'+siteId+'/lists');
+    if(lists&&lists.value){
+      addLog('Listas encontradas: '+lists.value.length,'ok');
+      lists.value.forEach(function(l){
+        addLog('  - '+l.displayName+' (ID: '+l.id+')');
+        if(l.displayName===LIST_PROJECTS)listProjectsId=l.id;
+        if(l.displayName===LIST_SEGUIMIENTO)listSeguimientoId=l.id;
+      });
+      if(listProjectsId)addLog('Lista Proyectos ID: '+listProjectsId,'ok');
+      else addLog('Lista Proyectos NO encontrada (nombre: '+LIST_PROJECTS+')','err');
+      if(listSeguimientoId)addLog('Lista Seguimiento ID: '+listSeguimientoId,'ok');
+      else addLog('Lista Seguimiento NO encontrada (nombre: '+LIST_SEGUIMIENTO+')','err');
+    }
+  }else{addLog('No se pudo obtener el Site ID','err')}
 }
 
 async function readProjects(){
-  addLog('---PROJECTS---','info');
-  var url=SP_SITE+"/_api/web/lists/getbytitle('"+encodeURIComponent(LIST_PROJECTS)+"')/items?$select=Title&$top=10&$orderby=Title";
-  addLog('URL: '+url);
-  var d=await spGet(url);
-  if(d&&d.d&&d.d.results){
-    addLog('Found: '+d.d.results.length+' projects','ok');
-    d.d.results.forEach(function(it,i){addLog('  '+(i+1)+'. '+it.Title)});
-  }else{addLog('Could not read projects','err')}
+  addLog('--- PROYECTOS ---','info');
+  if(!siteId||!listProjectsId){addLog('Inicia sesion primero (necesito Site ID y List ID)','err');return}
+  var url=GRAPH+'/sites/'+siteId+'/lists/'+listProjectsId+'/items?$expand=fields($select=Title)&$top=20';
+  addLog('Consultando...');
+  var d=await graphGet(url);
+  if(d&&d.value){
+    addLog('Proyectos: '+d.value.length,'ok');
+    d.value.forEach(function(it,i){
+      var title=it.fields?it.fields.Title:'(sin titulo)';
+      addLog('  '+(i+1)+'. '+title);
+    });
+  }else{addLog('No se pudieron leer','err')}
 }
 
 async function readSeguimiento(){
-  addLog('---SEGUIMIENTO---','info');
-  var url=SP_SITE+"/_api/web/lists/getbytitle('"+encodeURIComponent(LIST_SEGUIMIENTO)+"')/items?$select=Title,Proyecto,Asunto,Estado&$top=5";
-  addLog('URL: '+url);
-  var d=await spGet(url);
-  if(d&&d.d&&d.d.results){
-    addLog('Found: '+d.d.results.length+' records','ok');
-    d.d.results.forEach(function(it,i){addLog('  '+(i+1)+'. '+it.Title+' | '+(it.Proyecto||'-'))});
-  }else{addLog('Could not read seguimiento','err')}
+  addLog('--- SEGUIMIENTO ---','info');
+  if(!siteId||!listSeguimientoId){addLog('Inicia sesion primero','err');return}
+  var url=GRAPH+'/sites/'+siteId+'/lists/'+listSeguimientoId+'/items?$expand=fields&$top=5';
+  addLog('Consultando...');
+  var d=await graphGet(url);
+  if(d&&d.value){
+    addLog('Registros: '+d.value.length,'ok');
+    d.value.forEach(function(it,i){
+      var f=it.fields||{};
+      addLog('  '+(i+1)+'. '+(f.Title||'-')+' | Proyecto: '+(f.Proyecto||'-')+' | Estado: '+(f.Estado||'-'));
+    });
+  }else{addLog('No se pudo leer','err')}
 }
 
 async function writeTest(){
-  addLog('---WRITE TEST---','info');
-  if(!accessToken){addLog('Login first','err');return}
-  var url=SP_SITE+"/_api/web/lists/getbytitle('"+encodeURIComponent(LIST_SEGUIMIENTO)+"')/items";
+  addLog('--- ESCRIBIR TEST ---','info');
+  if(!siteId||!listSeguimientoId){addLog('Inicia sesion primero','err');return}
+  var url=GRAPH+'/sites/'+siteId+'/lists/'+listSeguimientoId+'/items';
   try{
     var r=await fetch(url,{
       method:'POST',
-      headers:{'Authorization':'Bearer '+accessToken,'Accept':'application/json;odata=verbose','Content-Type':'application/json;odata=verbose'},
-      body:JSON.stringify({'__metadata':{'type':'SP.Data.Seguimiento_x0020_de_x0020_EmailsListItem'},'Title':'TEST '+new Date().toLocaleString()})
+      headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+      body:JSON.stringify({fields:{Title:'TEST desde Add-in '+new Date().toLocaleString()}})
     });
-    if(r.ok){var d=await r.json();addLog('Created ID: '+d.d.Id,'ok')}
-    else{var t=await r.text();addLog('Write err HTTP '+r.status+': '+t.substring(0,300),'err')}
-  }catch(e){addLog('Write err: '+e.message,'err')}
+    if(r.ok||r.status===201){
+      var d=await r.json();
+      addLog('Creado! ID: '+d.id,'ok');
+    }else{
+      var t=await r.text();
+      addLog('Error HTTP '+r.status+': '+t.substring(0,300),'err');
+    }
+  }catch(e){addLog('Write error: '+e.message,'err')}
 }
 </script>
 </body>
