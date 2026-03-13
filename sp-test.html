@@ -3,188 +3,109 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Test SharePoint via Graph</title>
-  <script type="text/javascript" src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+  <title>Test Power Automate</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e8eaf0;padding:20px;font-size:14px}
     h1{margin-bottom:10px;font-size:20px}
     p{color:#9398ad;margin-bottom:16px}
     .btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin:4px;color:white}
-    .btn-blue{background:#6c72ff}.btn-green{background:#34d399}.btn-orange{background:#fb923c}
-    .btn:hover{opacity:0.85}
+    .btn-green{background:#34d399}.btn-orange{background:#fb923c}
+    .btn:hover{opacity:0.85}.btn:disabled{opacity:0.4;cursor:wait}
     #log{background:#1a1d27;border:1px solid #353a4f;border-radius:8px;padding:16px;margin-top:16px;white-space:pre-wrap;font-family:monospace;font-size:12px;max-height:500px;overflow-y:auto;line-height:1.8}
     .ok{color:#34d399}.err{color:#f87171}.info{color:#60a5fa}.warn{color:#fbbf24}
   </style>
 </head>
 <body>
-<h1>Test Conexion SharePoint via Graph</h1>
-<p>Usa Microsoft Graph API para acceder a SharePoint.</p>
+<h1>Test Power Automate Flows</h1>
+<p>Prueba la conexion con SharePoint via Power Automate.</p>
 <div>
-  <button class="btn btn-blue" onclick="doLogin()">1. Iniciar sesion</button>
-  <button class="btn btn-green" onclick="readProjects()">2. Leer proyectos</button>
-  <button class="btn btn-green" onclick="readSeguimiento()">3. Leer seguimiento</button>
-  <button class="btn btn-orange" onclick="writeTest()">4. Escribir test</button>
+  <button class="btn btn-green" id="btnRead" onclick="testRead()">1. Leer Proyectos</button>
+  <button class="btn btn-orange" id="btnWrite" onclick="testWrite()">2. Escribir Test en Seguimiento</button>
 </div>
-<div id="log">Esperando...\n</div>
+<div id="log">Listo para probar...\n</div>
 
 <script>
 var logEl=document.getElementById('log');
 function addLog(msg,cls){logEl.innerHTML+='<span class="'+(cls||'')+'">'+msg+'</span>\n';logEl.scrollTop=logEl.scrollHeight}
 
-var CLIENT_ID='fab38841-9eea-43ec-90e7-dcde9dfec093';
-var TENANT_ID='bab53ead-1cca-4e29-882d-60236ad916f6';
-var GRAPH='https://graph.microsoft.com/v1.0';
-var SP_HOST='avpconsultinginc.sharepoint.com';
-var SP_SITE_PATH='/sites/CODECLEARPERMIT';
-var LIST_PROJECTS='Lista de seguimiento de progreso';
-var LIST_SEGUIMIENTO='Seguimiento de Emails';
+var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
 
-var msalApp=null;
-var accessToken=null;
-var siteId=null;
-var listProjectsId=null;
-var listSeguimientoId=null;
+// Flow 2 URL - PENDIENTE (se reemplaza cuando lo cree)
+var FLOW_WRITE='PENDIENTE';
 
-// Init MSAL
-try{
-  if(typeof msal==='undefined'){addLog('ERROR: msal not loaded','err')}
-  else{
-    addLog('MSAL loaded OK','ok');
-    msalApp=new msal.PublicClientApplication({
-      auth:{
-        clientId:CLIENT_ID,
-        authority:'https://login.microsoftonline.com/'+TENANT_ID,
-        redirectUri:window.location.origin+'/email-manager-pro/sp-test.html'
-      },
-      cache:{cacheLocation:'sessionStorage'}
-    });
-    addLog('MSAL app created','ok');
-  }
-}catch(e){addLog('MSAL init error: '+e.message,'err')}
-
-var GRAPH_SCOPES=['https://graph.microsoft.com/Sites.Read.All','https://graph.microsoft.com/Sites.ReadWrite.All'];
-
-async function doLogin(){
-  if(!msalApp){addLog('MSAL not ready','err');return}
-  addLog('--- LOGIN ---','info');
+async function testRead(){
+  var btn=document.getElementById('btnRead');
+  btn.disabled=true;btn.textContent='Cargando...';
+  addLog('--- LEER PROYECTOS ---','info');
+  addLog('Llamando al flow...','info');
   try{
-    var accounts=msalApp.getAllAccounts();
-    addLog('Cuentas existentes: '+accounts.length);
-    if(accounts.length>0){
-      addLog('Cuenta: '+accounts[0].username,'ok');
-      try{
-        var sr=await msalApp.acquireTokenSilent({scopes:GRAPH_SCOPES,account:accounts[0]});
-        accessToken=sr.accessToken;
-        addLog('Token silencioso OK ('+accessToken.length+' chars)','ok');
-        await getSiteId();
-        return;
-      }catch(se){addLog('Silent fallo: '+se.message,'warn')}
-    }
-    addLog('Abriendo popup de login...','info');
-    var lr=await msalApp.loginPopup({scopes:GRAPH_SCOPES});
-    addLog('Login OK: '+lr.account.username,'ok');
-    var tr=await msalApp.acquireTokenSilent({scopes:GRAPH_SCOPES,account:lr.account});
-    accessToken=tr.accessToken;
-    addLog('Token OK ('+accessToken.length+' chars)','ok');
-    await getSiteId();
-  }catch(e){
-    addLog('Login error: '+e.message,'err');
-    if(e.message.indexOf('popup')>=0)addLog('TIP: Permite popups para este sitio','warn');
-    if(e.message.indexOf('consent')>=0||e.message.indexOf('AADSTS65001')>=0){
-      addLog('TIP: Necesitas consentimiento. Intenta con scopes basicos...','warn');
-      try{
-        var lr2=await msalApp.loginPopup({scopes:['User.Read']});
-        addLog('Login basico OK: '+lr2.account.username,'ok');
-        var tr2=await msalApp.acquireTokenSilent({scopes:GRAPH_SCOPES,account:lr2.account});
-        accessToken=tr2.accessToken;
-        addLog('Token con Graph scopes OK','ok');
-        await getSiteId();
-      }catch(e2){addLog('Fallback error: '+e2.message,'err')}
-    }
-  }
-}
-
-async function graphGet(url){
-  if(!accessToken){addLog('Inicia sesion primero','err');return null}
-  try{
-    var r=await fetch(url,{headers:{'Authorization':'Bearer '+accessToken,'Accept':'application/json'}});
-    if(!r.ok){var t=await r.text();addLog('HTTP '+r.status+': '+t.substring(0,300),'err');return null}
-    return await r.json();
-  }catch(e){addLog('Fetch error: '+e.message,'err');return null}
-}
-
-async function getSiteId(){
-  addLog('Obteniendo Site ID...','info');
-  var d=await graphGet(GRAPH+'/sites/'+SP_HOST+':'+SP_SITE_PATH);
-  if(d&&d.id){
-    siteId=d.id;
-    addLog('Site ID: '+siteId,'ok');
-    // Get list IDs
-    var lists=await graphGet(GRAPH+'/sites/'+siteId+'/lists');
-    if(lists&&lists.value){
-      addLog('Listas encontradas: '+lists.value.length,'ok');
-      lists.value.forEach(function(l){
-        addLog('  - '+l.displayName+' (ID: '+l.id+')');
-        if(l.displayName===LIST_PROJECTS)listProjectsId=l.id;
-        if(l.displayName===LIST_SEGUIMIENTO)listSeguimientoId=l.id;
-      });
-      if(listProjectsId)addLog('Lista Proyectos ID: '+listProjectsId,'ok');
-      else addLog('Lista Proyectos NO encontrada (nombre: '+LIST_PROJECTS+')','err');
-      if(listSeguimientoId)addLog('Lista Seguimiento ID: '+listSeguimientoId,'ok');
-      else addLog('Lista Seguimiento NO encontrada (nombre: '+LIST_SEGUIMIENTO+')','err');
-    }
-  }else{addLog('No se pudo obtener el Site ID','err')}
-}
-
-async function readProjects(){
-  addLog('--- PROYECTOS ---','info');
-  if(!siteId||!listProjectsId){addLog('Inicia sesion primero (necesito Site ID y List ID)','err');return}
-  var url=GRAPH+'/sites/'+siteId+'/lists/'+listProjectsId+'/items?$expand=fields($select=Title)&$top=20';
-  addLog('Consultando...');
-  var d=await graphGet(url);
-  if(d&&d.value){
-    addLog('Proyectos: '+d.value.length,'ok');
-    d.value.forEach(function(it,i){
-      var title=it.fields?it.fields.Title:'(sin titulo)';
-      addLog('  '+(i+1)+'. '+title);
-    });
-  }else{addLog('No se pudieron leer','err')}
-}
-
-async function readSeguimiento(){
-  addLog('--- SEGUIMIENTO ---','info');
-  if(!siteId||!listSeguimientoId){addLog('Inicia sesion primero','err');return}
-  var url=GRAPH+'/sites/'+siteId+'/lists/'+listSeguimientoId+'/items?$expand=fields&$top=5';
-  addLog('Consultando...');
-  var d=await graphGet(url);
-  if(d&&d.value){
-    addLog('Registros: '+d.value.length,'ok');
-    d.value.forEach(function(it,i){
-      var f=it.fields||{};
-      addLog('  '+(i+1)+'. '+(f.Title||'-')+' | Proyecto: '+(f.Proyecto||'-')+' | Estado: '+(f.Estado||'-'));
-    });
-  }else{addLog('No se pudo leer','err')}
-}
-
-async function writeTest(){
-  addLog('--- ESCRIBIR TEST ---','info');
-  if(!siteId||!listSeguimientoId){addLog('Inicia sesion primero','err');return}
-  var url=GRAPH+'/sites/'+siteId+'/lists/'+listSeguimientoId+'/items';
-  try{
-    var r=await fetch(url,{
+    var r=await fetch(FLOW_READ,{
       method:'POST',
-      headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
-      body:JSON.stringify({fields:{Title:'TEST desde Add-in '+new Date().toLocaleString()}})
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({})
     });
-    if(r.ok||r.status===201){
-      var d=await r.json();
-      addLog('Creado! ID: '+d.id,'ok');
-    }else{
-      var t=await r.text();
-      addLog('Error HTTP '+r.status+': '+t.substring(0,300),'err');
+    addLog('HTTP Status: '+r.status);
+    var text=await r.text();
+    addLog('Response length: '+text.length+' chars');
+    try{
+      var data=JSON.parse(text);
+      if(Array.isArray(data)){
+        addLog('Proyectos encontrados: '+data.length,'ok');
+        data.slice(0,15).forEach(function(item,i){
+          var title=item.Title||item.fields?.Title||JSON.stringify(item).substring(0,80);
+          addLog('  '+(i+1)+'. '+title);
+        });
+        if(data.length>15) addLog('  ... y '+(data.length-15)+' mas');
+      } else if(data.error){
+        addLog('Error del flow: '+JSON.stringify(data.error),'err');
+      } else {
+        addLog('Respuesta (no es array): '+text.substring(0,500),'warn');
+      }
+    }catch(pe){
+      addLog('Respuesta raw: '+text.substring(0,500),'warn');
     }
-  }catch(e){addLog('Write error: '+e.message,'err')}
+  }catch(e){
+    addLog('Error: '+e.message,'err');
+    if(e.message.indexOf('CORS')>=0||e.message.indexOf('fetch')>=0){
+      addLog('Puede ser un error de CORS. Verificando...','warn');
+    }
+  }
+  btn.disabled=false;btn.textContent='1. Leer Proyectos';
+}
+
+async function testWrite(){
+  if(FLOW_WRITE==='PENDIENTE'){addLog('Flow de escritura aun no configurado','warn');return}
+  var btn=document.getElementById('btnWrite');
+  btn.disabled=true;btn.textContent='Escribiendo...';
+  addLog('--- ESCRIBIR TEST ---','info');
+  try{
+    var r=await fetch(FLOW_WRITE,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        titulo:'TEST desde Add-in',
+        proyecto:'TEST-0000',
+        asunto:'Email de prueba',
+        de:'test@test.com',
+        fecha:new Date().toISOString(),
+        estado:'Pendiente',
+        notas:'Esta es una nota de prueba creada desde el add-in'
+      })
+    });
+    addLog('HTTP Status: '+r.status);
+    var text=await r.text();
+    try{
+      var data=JSON.parse(text);
+      if(data.ok) addLog('Registro creado exitosamente!','ok');
+      else addLog('Respuesta: '+text.substring(0,300),'warn');
+    }catch(pe){
+      addLog('Respuesta: '+text.substring(0,300),'warn');
+    }
+  }catch(e){
+    addLog('Error: '+e.message,'err');
+  }
+  btn.disabled=false;btn.textContent='2. Escribir Test en Seguimiento';
 }
 </script>
 </body>
