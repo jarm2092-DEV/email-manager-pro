@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Test SharePoint Connection</title>
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <style>
+    body{font-family:sans-serif;background:#1a1d27;color:#e8eaf0;padding:20px;max-width:600px;margin:0 auto}
+    h2{color:#6c72ff}
+    .btn{padding:10px 20px;background:#6c72ff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;margin:5px}
+    .btn:hover{background:#7f84ff}
+    .btn-green{background:#34d399}.btn-green:hover{background:#2ab885}
+    #log{background:#222636;border:1px solid #353a4f;border-radius:8px;padding:12px;margin-top:15px;white-space:pre-wrap;font-size:12px;max-height:400px;overflow-y:auto;line-height:1.8}
+    .ok{color:#34d399}.err{color:#f87171}.info{color:#60a5fa}
+  </style>
+</head>
+<body>
+  <h2>🔌 Test Conexión SharePoint</h2>
+  <p>Esta página prueba que la autenticación y el acceso a tus listas funcionan correctamente.</p>
+  <div>
+    <button class="btn" onclick="login()">1. Iniciar sesión</button>
+    <button class="btn" onclick="testProjects()">2. Leer proyectos</button>
+    <button class="btn" onclick="testSeguimiento()">3. Leer seguimiento</button>
+    <button class="btn btn-green" onclick="testWriteSeguimiento()">4. Escribir en seguimiento (test)</button>
+  </div>
+  <div id="log">Esperando...\n</div>
+
+<script>
+const CLIENT_ID = 'fab38841-9eea-43ec-90e7-dcde9dfec093';
+const TENANT_ID = 'bab53ead-1cca-4e29-882d-60236ad916f6';
+const SP_HOST = 'avpconsultinginc.sharepoint.com';
+const SP_SITE = '/sites/CODECLEARPERMIT';
+const LIST_PROJECTS = 'Lista de seguimiento de progreso';
+const LIST_SEGUIMIENTO = 'Seguimiento de Emails';
+
+const SCOPES = ['https://' + SP_HOST + '/.default'];
+
+const logEl = document.getElementById('log');
+function log(msg, cls) {
+  logEl.innerHTML += '<span class="' + (cls||'info') + '">' + msg + '</span>\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// MSAL Config
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: 'https://login.microsoftonline.com/' + TENANT_ID,
+    redirectUri: window.location.origin + '/email-manager-pro/blank.html'
+  },
+  cache: { cacheLocation: 'localStorage' }
+};
+
+let msalInstance = null;
+let accessToken = null;
+
+try {
+  msalInstance = new msal.PublicClientApplication(msalConfig);
+  log('MSAL inicializado correctamente', 'ok');
+} catch(e) {
+  log('Error MSAL: ' + e.message, 'err');
+}
+
+async function login() {
+  log('Intentando login...');
+  try {
+    // Try silent first
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      log('Cuenta encontrada: ' + accounts[0].username);
+      try {
+        const resp = await msalInstance.acquireTokenSilent({
+          scopes: SCOPES,
+          account: accounts[0]
+        });
+        accessToken = resp.accessToken;
+        log('✅ Token obtenido (silencioso)', 'ok');
+        log('Token preview: ' + accessToken.substring(0, 50) + '...', 'info');
+        return;
+      } catch(e) {
+        log('Silent falló, intentando popup...', 'info');
+      }
+    }
+    
+    // Popup login
+    const resp = await msalInstance.acquireTokenPopup({
+      scopes: SCOPES
+    });
+    accessToken = resp.accessToken;
+    log('✅ Token obtenido (popup) - Usuario: ' + resp.account.username, 'ok');
+    log('Token preview: ' + accessToken.substring(0, 50) + '...', 'info');
+  } catch(e) {
+    log('❌ Error login: ' + e.message, 'err');
+    if (e.errorCode) log('Código: ' + e.errorCode, 'err');
+  }
+}
+
+async function spFetch(endpoint, method, body) {
+  if (!accessToken) { log('❌ Primero inicia sesión', 'err'); return null; }
+  const url = 'https://' + SP_HOST + SP_SITE + '/_api/' + endpoint;
+  log((method||'GET') + ' ' + url);
+  const opts = {
+    method: method || 'GET',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken,
+      'Accept': 'application/json;odata=verbose',
+      'Content-Type': 'application/json;odata=verbose'
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  
+  try {
+    const resp = await fetch(url, opts);
+    log('Status: ' + resp.status + ' ' + resp.statusText, resp.ok ? 'ok' : 'err');
+    if (!resp.ok) {
+      const errText = await resp.text();
+      log('Error body: ' + errText.substring(0, 300), 'err');
+      return null;
+    }
+    const data = await resp.json();
+    return data;
+  } catch(e) {
+    log('❌ Fetch error: ' + e.message, 'err');
+    return null;
+  }
+}
+
+async function testProjects() {
+  log('\n--- LEYENDO PROYECTOS ---');
+  const data = await spFetch("web/lists/getbytitle('" + encodeURIComponent(LIST_PROJECTS) + "')/items?$select=Title&$top=10&$orderby=Title asc");
+  if (data && data.d && data.d.results) {
+    log('✅ Proyectos encontrados: ' + data.d.results.length, 'ok');
+    data.d.results.forEach(function(item, i) {
+      log('  ' + (i+1) + '. ' + item.Title);
+    });
+  } else {
+    log('❌ No se pudieron leer los proyectos', 'err');
+  }
+}
+
+async function testSeguimiento() {
+  log('\n--- LEYENDO SEGUIMIENTO ---');
+  const data = await spFetch("web/lists/getbytitle('" + encodeURIComponent(LIST_SEGUIMIENTO) + "')/items?$select=Title,Proyecto,Asunto,De,Estado,Notas&$top=5&$orderby=Id desc");
+  if (data && data.d && data.d.results) {
+    log('✅ Items en seguimiento: ' + data.d.results.length, 'ok');
+    data.d.results.forEach(function(item, i) {
+      log('  ' + (i+1) + '. ' + (item.Title||'sin titulo') + ' | Proyecto: ' + (item.Proyecto||'-'));
+    });
+  } else {
+    log('❌ No se pudo leer el seguimiento', 'err');
+  }
+}
+
+async function testWriteSeguimiento() {
+  log('\n--- ESCRIBIENDO TEST EN SEGUIMIENTO ---');
+  // First get the list item entity type
+  const listInfo = await spFetch("web/lists/getbytitle('" + encodeURIComponent(LIST_SEGUIMIENTO) + "')?$select=ListItemEntityTypeFullName");
+  if (!listInfo || !listInfo.d) { log('❌ No se pudo obtener info de la lista', 'err'); return; }
+  const entityType = listInfo.d.ListItemEntityTypeFullName;
+  log('Entity type: ' + entityType);
+
+  const testItem = {
+    '__metadata': { 'type': entityType },
+    'Title': 'TEST desde Email Manager Pro',
+    'Asunto': 'Email de prueba',
+    'Estado': 'Pendiente'
+  };
+
+  const data = await spFetch("web/lists/getbytitle('" + encodeURIComponent(LIST_SEGUIMIENTO) + "')/items", 'POST', testItem);
+  if (data && data.d) {
+    log('✅ Item creado con ID: ' + data.d.Id, 'ok');
+    log('(Puedes ir a SharePoint y verificar que apareció)', 'ok');
+  } else {
+    log('❌ No se pudo escribir', 'err');
+  }
+}
+</script>
+</body>
+</html>
