@@ -215,7 +215,7 @@
   <div class="header-top">
     <div class="logo"><div class="logo-icon">📋</div><span class="logo-text">Email Manager Pro</span></div>
     <div class="header-actions">
-      <button class="icon-btn" onclick="loadProjectsFromSP()" title="Cargar proyectos de SharePoint">📂</button>
+      <button class="icon-btn" onclick="loadProjectsFromSP(true)" title="Cargar proyectos de SharePoint">📂</button>
       <button class="icon-btn" onclick="sendToSharePoint()" title="Enviar a SharePoint">☁️</button>
       <button class="icon-btn" onclick="manualSyncTags()" title="Sincronizar etiquetas">🏷</button>
       <button class="icon-btn" onclick="refreshData()" title="Actualizar">↻</button>
@@ -255,9 +255,6 @@
       <div class="inline-form" id="projectInline">
         <input type="text" class="text-input" id="inlineProjectName" placeholder="Nuevo proyecto..." onkeydown="if(event.key==='Enter')inlineAddProject()"/>
         <button class="btn btn-primary btn-sm" onclick="inlineAddProject()">+</button></div>
-      <div id="projectAddressWrap" style="margin-top:6px;display:none">
-        <input type="text" class="text-input" id="projectAddress" readonly style="font-size:11.5px;color:var(--text-muted);cursor:default;background:rgba(0,0,0,0.15);width:100%;" placeholder="Dirección del proyecto"/>
-      </div>
     </div>
     <div class="section">
       <div class="section-header"><div class="section-label">Responsable / Asignado</div></div>
@@ -328,13 +325,35 @@ const CAT_NOTAS='EMP Notas';
 const FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
 const FLOW_WRITE='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/9307f259fdeb4e529b3fd0641f55c8d2/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=HCbcqsjCy5VW9VC6n0qY-En_G_huzkaC-dHtMov6U0Q';
 let spSyncing=false;
+let spProjects=[];  // Projects loaded from SharePoint (kept in memory only)
 let selectedColor='accent',mailItem=null,customProperties=null,officeReady=false;
 
 function lsGet(k,fb){try{const v=localStorage.getItem(STORAGE_PREFIX+k);return v?JSON.parse(v):fb}catch{return fb}}
 function lsSet(k,v){try{localStorage.setItem(STORAGE_PREFIX+k,JSON.stringify(v))}catch{}}
 function getAuthor(){return lsGet('author','')||'Anónimo'}
 function getStatuses(){return lsGet('statuses',DEFAULT_STATUSES)}
-function getProjects(){return lsGet('projects',[]).sort((a,b)=>a.localeCompare(b))}
+function getProjects(){
+  // Merge localStorage projects + SharePoint projects (no duplicates)
+  const local=lsGet('projects',[]);
+  const merged=[...local];
+  spProjects.forEach(p=>{if(!merged.some(m=>m.toUpperCase()===p.toUpperCase()))merged.push(p)});
+  return merged.sort((a,b)=>a.localeCompare(b));
+}
+function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z]{2,5}-\d{3,5}/);return m?m[0].toUpperCase():null}
+function splitProject(full){
+  if(!full)return{id:'',address:''};
+  const m=full.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);
+  if(m)return{id:m[1].toUpperCase(),address:(m[2]||'').replace(/^-\s*/,'').trim()};
+  return{id:full,address:''};
+}
+function getFullProjectName(idOrFull){
+  if(!idOrFull)return '';
+  const pp=getProjects();
+  const exact=pp.find(p=>p===idOrFull);if(exact)return exact;
+  const id=splitProject(idOrFull).id;
+  if(id){const match=pp.find(p=>splitProject(p).id===id);if(match)return match;}
+  return idOrFull;
+}
 
 function getEmailData() {
   if(!customProperties) return { status: '', project: '', responsable: '', notes: [] };
@@ -401,7 +420,7 @@ Office.onReady(function(info){
     loadCustomProperties(function(){renderAll();updateHeaderTags()});
     try{Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged,onItemChanged)}catch(e){}
     ensureMasterCategory();
-    loadProjectsFromSP();
+    loadProjectsFromSP(false);  // Silent load on startup
   }else{document.getElementById('emailSubject').textContent='Vista previa';renderAll()}
 });
 setTimeout(function(){if(!officeReady){document.getElementById('emailSubject').textContent='Vista previa';renderAll()}},3000);
@@ -414,15 +433,6 @@ function onItemChanged(){
 
 // ── Categories ──
 function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z]{2,5}-\d{3,5}/);return m?m[0].toUpperCase():null}
-
-function splitProject(fullName){
-  // Splits "CCP-0031-16475 GOLF CLUB RD 313 WESTON, FLORIDA 33326" into
-  // { id: "CCP-0031", address: "16475 GOLF CLUB RD 313 WESTON, FLORIDA 33326" }
-  if(!fullName)return{id:'',address:''};
-  const m=fullName.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);
-  if(m)return{id:m[1].toUpperCase(),address:(m[2]||'').replace(/^-\s*/,'').trim()};
-  return{id:fullName,address:''};
-}
 
 function ensureMasterCategory(){
   try{Office.context.mailbox.masterCategories.getAsync(function(r){
@@ -479,16 +489,12 @@ function renderStatuses(){
 }
 function renderProjectSearch(){
   const d=getEmailData(),si=document.getElementById('projectSearch'),cb=document.getElementById('projectClear');
-  const addrWrap=document.getElementById('projectAddressWrap'),addrInput=document.getElementById('projectAddress');
   if(d.project){
-    // d.project is now just the ID (e.g. "CCP-0031"), find full name from list
-    const fullName=getFullProjectName(d.project);
-    const sp=splitProject(fullName);
+    const full=getFullProjectName(d.project);
+    const sp=splitProject(full);
     si.value=sp.id||d.project;
     cb.classList.add('visible');
-    if(sp.address){addrInput.value=sp.address;addrWrap.style.display='block'}
-    else{addrWrap.style.display='none'}
-  }else{si.value='';cb.classList.remove('visible');addrWrap.style.display='none'}
+  }else{si.value='';cb.classList.remove('visible')}
 }
 function renderResponsable(){
   const d=getEmailData();document.getElementById('responsableInput').value=d.responsable||''
@@ -538,7 +544,7 @@ function updateSummary(){
 function updateHeaderTags(){
   const d=getEmailData(),el=document.getElementById('emailSubject');
   el.querySelectorAll('.email-category').forEach(e=>e.remove());
-  if(d.project){const t=document.createElement('span');t.className='email-category has-project';t.textContent=splitProject(d.project).id||d.project;el.appendChild(t)}
+  if(d.project){const t=document.createElement('span');t.className='email-category has-project';t.textContent=extractProjectId(d.project)||d.project;el.appendChild(t)}
   if(d.status){const t=document.createElement('span');t.className='email-category has-status';t.textContent=d.status;el.appendChild(t)}
 }
 function renderSettings() {
@@ -587,30 +593,16 @@ function filterProjects(){
   if(!f.length&&q)h+=`<div class="project-no-results">No se encontró "${esc(q)}"</div>`;
   else h+=f.map(p=>{
     const sp=splitProject(p);
-    const sel=d.project===p?'selected':'';
-    return `<div class="project-option ${sel}" onclick="selectProject('${esc(p)}')"><strong>${esc(sp.id)}</strong>${sp.address?' <span style="font-size:10px;color:var(--text-muted)">'+esc(sp.address)+'</span>':''}</div>`;
+    const isSelected=d.project===sp.id?'selected':'';
+    return `<div class="project-option ${isSelected}" onclick="selectProject('${esc(p)}')"><strong>${esc(sp.id)}</strong>${sp.address?' <span style="font-size:10px;color:var(--text-muted)">'+esc(sp.address)+'</span>':''}</div>`;
   }).join('');
   dd.innerHTML=h
 }
-function getFullProjectName(idOrFull){
-  // Given an ID like "CCP-0031" or full name, returns the full name from the projects list
-  if(!idOrFull)return '';
-  const pp=getProjects();
-  // Try exact match first
-  const exact=pp.find(p=>p===idOrFull);
-  if(exact)return exact;
-  // Try matching by ID prefix
-  const id=splitProject(idOrFull).id;
-  if(id){const match=pp.find(p=>splitProject(p).id===id);if(match)return match;}
-  return idOrFull;
-}
-
 function selectProject(name){
   const d=getEmailData();const old=d.project;
-  // Save only the ID in custom properties to save space
   const sp=splitProject(name);
-  d.project=sp.id||name;
-  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);autoSyncSP();showToast(sp.id?'Proyecto: '+sp.id:'Proyecto removido')});
+  d.project=sp.id||name;  // Save only short ID in custom properties
+  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);showToast(d.project?'Proyecto: '+d.project:'Proyecto removido')});
   document.getElementById('projectDropdown').classList.remove('open')
 }
 function clearProject(){selectProject('')}
@@ -621,7 +613,7 @@ function projectSearchKey(e){
 document.addEventListener('click',function(e){if(!e.target.closest('.project-selector'))document.getElementById('projectDropdown').classList.remove('open')});
 
 // ── Actions ──
-function toggleStatus(name){const d=getEmailData();d.status=(d.status===name)?'':name;setEmailData(d,function(){renderStatuses();updateSummary();updateHeaderTags();autoSyncSP();showToast(d.status?'Estado: '+d.status:'Estado removido')})}
+function toggleStatus(name){const d=getEmailData();d.status=(d.status===name)?'':name;setEmailData(d,function(){renderStatuses();updateSummary();updateHeaderTags();showToast(d.status?'Estado: '+d.status:'Estado removido');setTimeout(autoSyncSP,500)})}
 function saveResponsable(){
   const v=document.getElementById('responsableInput').value.trim();
   const d=getEmailData();d.responsable=v;
@@ -633,9 +625,9 @@ function addNote(tid){
   const author=getAuthor();if(author==='Anónimo'){showToast('Configura tu nombre en ⚙ Config',true);return}
   const d=getEmailData();if(!d.notes)d.notes=[];
   d.notes.push({author,text:txt,date:new Date().toLocaleString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})});
-  setEmailData(d,function(){ta.value='';renderNotes();updateSummary();syncCategories();autoSyncSP();showToast('Nota guardada')})
+  setEmailData(d,function(){ta.value='';renderNotes();updateSummary();syncCategories();showToast('Nota guardada');setTimeout(autoSyncSP,500)})
 }
-function deleteNote(i){const d=getEmailData();if(!d.notes||!d.notes[i])return;d.notes.splice(i,1);setEmailData(d,function(){renderNotes();updateSummary();syncCategories();autoSyncSP();showToast('Nota eliminada')})}
+function deleteNote(i){const d=getEmailData();if(!d.notes||!d.notes[i])return;d.notes.splice(i,1);setEmailData(d,function(){renderNotes();updateSummary();syncCategories();showToast('Nota eliminada');setTimeout(autoSyncSP,500)})}
 
 function startEditNote(i){const el=document.getElementById('noteEdit-'+i);if(!el)return;el.classList.add('visible');document.getElementById('noteText-'+i).style.display='none';const ta=document.getElementById('noteEditText-'+i);ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length)}
 function cancelEditNote(i){const el=document.getElementById('noteEdit-'+i);if(el)el.classList.remove('visible');document.getElementById('noteText-'+i).style.display=''}
@@ -721,10 +713,9 @@ function toggleInlineForm(id){const f=document.getElementById(id),v=f.classList.
 function inlineAddStatus(){const inp=document.getElementById('inlineStatusName'),n=inp.value.trim();if(!n)return;const ss=getStatuses();if(ss.some(s=>s.name.toLowerCase()===n.toLowerCase())){showToast('Ya existe',true);return}ss.push({name:n,color:'accent'});lsSet('statuses',ss);inp.value='';document.getElementById('statusInline').classList.remove('visible');renderStatuses();renderSettings();showToast('Estado: '+n)}
 function inlineAddProject(){
   const inp=document.getElementById('inlineProjectName'),n=inp.value.trim().toUpperCase();if(!n)return;
-  const pp=getProjects();if(pp.some(p=>p.toUpperCase()===n)){showToast('Ya existe',true);return}
+  const pp=lsGet('projects',[]);if(pp.some(p=>p.toUpperCase()===n)){showToast('Ya existe',true);return}
   pp.push(n);pp.sort((a,b)=>a.localeCompare(b));lsSet('projects',pp);inp.value='';
   document.getElementById('projectInline').classList.remove('visible');
-  // Auto-select the new project - save only ID in email
   const sp=splitProject(n);
   const d=getEmailData();const old=d.project;d.project=sp.id||n;
   setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);renderSettings();showToast('Proyecto: '+(sp.id||n))})
@@ -749,59 +740,28 @@ function bulkAddProjects(){
 function resetAll(){if(!confirm('¿Borrar configuración local?'))return;localStorage.removeItem(STORAGE_PREFIX+'author');localStorage.removeItem(STORAGE_PREFIX+'statuses');localStorage.removeItem(STORAGE_PREFIX+'projects');renderAll();showToast('Restablecido')}
 function refreshData(){loadCustomProperties(function(){renderAll();updateHeaderTags()});showToast('Actualizado')}
 
-// ── SharePoint Integration ──
-async function loadProjectsFromSP(){
+// ── SharePoint via Power Automate ──
+async function loadProjectsFromSP(showMsg){
   try{
-    const r=await fetch(FLOW_READ,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const r=await fetch(FLOW_READ,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     if(!r.ok)return;
     const data=await r.json();
     if(!Array.isArray(data))return;
-    const localProjects=getProjects();
-    const spProjects=data.map(item=>(item.Title||'').trim().toUpperCase()).filter(t=>t.length>0);
-    let merged=[...localProjects];
-    let added=0;
-    spProjects.forEach(p=>{if(!merged.some(m=>m.toUpperCase()===p)){merged.push(p);added++}});
-    merged.sort((a,b)=>a.localeCompare(b));
-    lsSet('projects',merged);
-    renderProjectSearch();renderSettings();
-    if(added>0)showToast('SP: '+added+' proyecto(s) nuevos');
-  }catch(e){}
+    spProjects=data.map(item=>(item.Title||'').trim().toUpperCase()).filter(t=>t.length>0);
+    renderProjectSearch();
+    if(showMsg)showToast('SP: '+spProjects.length+' proyectos cargados');
+  }catch(e){if(showMsg)showToast('Error SP: '+e.message,true)}
 }
 
 async function sendToSharePoint(){
   if(spSyncing){showToast('Sincronizando...');return}
   const d=getEmailData();
   if(!d.notes||!d.notes.length){showToast('Sin datos para enviar',true);return}
-  spSyncing=true;
-  showToast('Enviando a SharePoint...');
+  spSyncing=true;showToast('Enviando a SharePoint...');
   try{
-    const notasText=d.notes.map(n=>'['+n.date+'] '+n.author+':\n'+n.text+(n.eventDate?' 📅'+n.eventDate:'')).join('\n\n');
     const fullProject=getFullProjectName(d.project);
-    const payload={
-      titulo:mailItem?mailItem.subject:'Email sin asunto',
-      proyecto:fullProject,
-      asunto:mailItem?mailItem.subject:'',
-      de:mailItem&&mailItem.from?mailItem.from.emailAddress:'',
-      fecha:new Date().toISOString(),
-      estado:d.status||'',
-      notas:notasText
-    };
-    const r=await fetch(FLOW_WRITE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(r.ok)showToast('Enviado a SharePoint ✓');
-    else showToast('Error SharePoint',true);
-  }catch(e){showToast('Error: '+e.message,true)}
-  spSyncing=false;
-}
-
-async function autoSyncSP(){
-  const d=getEmailData();
-  if(!d.notes||!d.notes.length)return;
-  if(spSyncing)return;
-  spSyncing=true;
-  try{
-    const notasText=d.notes.map(n=>'['+n.date+'] '+n.author+':\n'+n.text+(n.eventDate?' 📅'+n.eventDate:'')).join('\n\n');
-    const fullProject=getFullProjectName(d.project);
-    await fetch(FLOW_WRITE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    const notasText=d.notes.map(n=>'['+n.date+'] '+n.author+':\n'+n.text).join('\n\n');
+    const r=await fetch(FLOW_WRITE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       titulo:mailItem?mailItem.subject:'Email',
       proyecto:fullProject,
       asunto:mailItem?mailItem.subject:'',
@@ -810,8 +770,29 @@ async function autoSyncSP(){
       estado:d.status||'',
       notas:notasText
     })});
-  }catch(e){}
+    if(r.ok)showToast('Enviado a SharePoint ✓');else showToast('Error SP',true);
+  }catch(e){showToast('Error: '+e.message,true)}
   spSyncing=false;
+}
+
+async function autoSyncSP(){
+  // Silent background sync - never blocks, never shows errors
+  const d=getEmailData();
+  if(!d.notes||!d.notes.length||spSyncing)return;
+  spSyncing=true;
+  try{
+    const fullProject=getFullProjectName(d.project);
+    const notasText=d.notes.map(n=>'['+n.date+'] '+n.author+':\n'+n.text).join('\n\n');
+    fetch(FLOW_WRITE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      titulo:mailItem?mailItem.subject:'Email',
+      proyecto:fullProject,
+      asunto:mailItem?mailItem.subject:'',
+      de:mailItem&&mailItem.from?mailItem.from.emailAddress:'',
+      fecha:new Date().toISOString(),
+      estado:d.status||'',
+      notas:notasText
+    })}).finally(()=>{spSyncing=false});
+  }catch(e){spSyncing=false}
 }
 
 // ── UI ──
