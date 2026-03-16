@@ -481,8 +481,10 @@ function renderProjectSearch(){
   const d=getEmailData(),si=document.getElementById('projectSearch'),cb=document.getElementById('projectClear');
   const addrWrap=document.getElementById('projectAddressWrap'),addrInput=document.getElementById('projectAddress');
   if(d.project){
-    const sp=splitProject(d.project);
-    si.value=sp.id;
+    // d.project is now just the ID (e.g. "CCP-0031"), find full name from list
+    const fullName=getFullProjectName(d.project);
+    const sp=splitProject(fullName);
+    si.value=sp.id||d.project;
     cb.classList.add('visible');
     if(sp.address){addrInput.value=sp.address;addrWrap.style.display='block'}
     else{addrWrap.style.display='none'}
@@ -590,9 +592,25 @@ function filterProjects(){
   }).join('');
   dd.innerHTML=h
 }
+function getFullProjectName(idOrFull){
+  // Given an ID like "CCP-0031" or full name, returns the full name from the projects list
+  if(!idOrFull)return '';
+  const pp=getProjects();
+  // Try exact match first
+  const exact=pp.find(p=>p===idOrFull);
+  if(exact)return exact;
+  // Try matching by ID prefix
+  const id=splitProject(idOrFull).id;
+  if(id){const match=pp.find(p=>splitProject(p).id===id);if(match)return match;}
+  return idOrFull;
+}
+
 function selectProject(name){
-  const d=getEmailData();const old=d.project;d.project=name;
-  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);autoSyncSP();showToast(name?'Proyecto: '+name:'Proyecto removido')});
+  const d=getEmailData();const old=d.project;
+  // Save only the ID in custom properties to save space
+  const sp=splitProject(name);
+  d.project=sp.id||name;
+  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);autoSyncSP();showToast(sp.id?'Proyecto: '+sp.id:'Proyecto removido')});
   document.getElementById('projectDropdown').classList.remove('open')
 }
 function clearProject(){selectProject('')}
@@ -706,9 +724,10 @@ function inlineAddProject(){
   const pp=getProjects();if(pp.some(p=>p.toUpperCase()===n)){showToast('Ya existe',true);return}
   pp.push(n);pp.sort((a,b)=>a.localeCompare(b));lsSet('projects',pp);inp.value='';
   document.getElementById('projectInline').classList.remove('visible');
-  // Auto-select the new project
-  const d=getEmailData();const old=d.project;d.project=n;
-  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);renderSettings();showToast('Proyecto: '+n)})
+  // Auto-select the new project - save only ID in email
+  const sp=splitProject(n);
+  const d=getEmailData();const old=d.project;d.project=sp.id||n;
+  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);renderSettings();showToast('Proyecto: '+(sp.id||n))})
 }
 
 // ── Settings ──
@@ -757,9 +776,10 @@ async function sendToSharePoint(){
   showToast('Enviando a SharePoint...');
   try{
     const notasText=d.notes.map(n=>'['+n.date+'] '+n.author+':\n'+n.text+(n.eventDate?' 📅'+n.eventDate:'')).join('\n\n');
+    const fullProject=getFullProjectName(d.project);
     const payload={
       titulo:mailItem?mailItem.subject:'Email sin asunto',
-      proyecto:d.project||'',
+      proyecto:fullProject,
       asunto:mailItem?mailItem.subject:'',
       de:mailItem&&mailItem.from?mailItem.from.emailAddress:'',
       fecha:new Date().toISOString(),
@@ -780,9 +800,10 @@ async function autoSyncSP(){
   spSyncing=true;
   try{
     const notasText=d.notes.map(n=>'['+n.date+'] '+n.author+':\n'+n.text+(n.eventDate?' 📅'+n.eventDate:'')).join('\n\n');
+    const fullProject=getFullProjectName(d.project);
     await fetch(FLOW_WRITE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       titulo:mailItem?mailItem.subject:'Email',
-      proyecto:d.project||'',
+      proyecto:fullProject,
       asunto:mailItem?mailItem.subject:'',
       de:mailItem&&mailItem.from?mailItem.from.emailAddress:'',
       fecha:new Date().toISOString(),
