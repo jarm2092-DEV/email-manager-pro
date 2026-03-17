@@ -108,7 +108,7 @@ var STATUS_OPTIONS=[
 var projects=[];
 
 function statusClass(s){
-  if(!s)return'st-porcomenzar';
+  if(!s||typeof s!=='string')return'st-porcomenzar';
   var l=s.toLowerCase().replace(/\s+/g,'');
   if(l.includes('norequiere'))return'st-norequiere';
   if(l.includes('porcomenzar'))return'st-porcomenzar';
@@ -145,9 +145,10 @@ async function loadProjects(){
     var data=await r.json();
     if(!Array.isArray(data)){showToast('Respuesta inesperada',true);return}
     projects=data.map(function(item){
+      var dw=item.DWSTATUS||item.DWStatus||item.dwstatus||item.Dwstatus||'';
       return{
-        title:item.Title||'',
-        dwstatus:item.DWSTATUS||item.DWStatus||item.dwstatus||''
+        title:(item.Title||'').toString(),
+        dwstatus:(typeof dw==='string')?dw:(dw?String(dw):'')
       };
     }).filter(function(p){return p.title.length>0});
     projects.sort(function(a,b){return a.title.localeCompare(b.title)});
@@ -184,7 +185,8 @@ function renderProjects(){
       '<div class="status-selector" id="sel-'+i+'">'+
         STATUS_OPTIONS.map(function(opt){
           var isActive=p.dwstatus===opt?'active':'';
-          return '<button class="status-opt '+isActive+'" onclick="updateStatus('+i+',\''+esc(opt).replace(/'/g,"\\'")+'\')">'+esc(opt)+'</button>';
+          var safeOpt=opt.replace(/'/g,"\\'");
+          return '<button class="status-opt '+isActive+'" onclick="updateStatus('+i+',\''+safeOpt+'\')">'+esc(opt)+'</button>';
         }).join('')+
       '</div>'+
     '</div>';
