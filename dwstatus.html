@@ -146,10 +146,9 @@ async function loadProjects(){
     if(!Array.isArray(data)){showToast('Respuesta inesperada',true);return}
     projects=data.map(function(item){
       var dw=item.DWSTATUS||item.DWStatus||item.dwstatus||item.Dwstatus||'';
-      return{
-        title:(item.Title||'').toString(),
-        dwstatus:(typeof dw==='string')?dw:(dw?String(dw):'')
-      };
+      if(dw&&typeof dw==='object'){dw=dw.Value||dw.value||(dw.results?dw.results[0]:'')||''}
+      if(typeof dw!=='string')dw=dw?String(dw):'';
+      return{title:(item.Title||'').toString(),dwstatus:dw};
     }).filter(function(p){return p.title.length>0});
     projects.sort(function(a,b){return a.title.localeCompare(b.title)});
     renderProjects();
