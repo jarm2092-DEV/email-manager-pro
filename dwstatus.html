@@ -45,6 +45,19 @@
     .status-current.st-esperaingexpress{background:rgba(236,72,153,0.15);color:#ec4899;border:1px solid rgba(236,72,153,0.3)}
     .status-current.st-pendienteinfo{background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3)}
     .status-current.st-terminado{background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)}
+    .status-current.st-correccion{background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)}
+    
+    .divider{height:1px;background:var(--border);margin:12px 0}
+    .field-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px}
+    
+    .dib-selector{display:flex;flex-wrap:wrap;gap:6px}
+    .dib-opt{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;font-size:11.5px;font-weight:500;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+    .dib-opt:hover{border-color:var(--muted);transform:translateY(-1px)}
+    .dib-opt:active{transform:scale(0.96)}
+    .dib-opt.active{border-color:var(--info);background:rgba(59,130,246,0.15);color:#60a5fa;box-shadow:0 0 0 1px var(--info)}
+    .dib-opt:disabled{opacity:0.4;cursor:wait;transform:none}
+    
+    .dib-current{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3)}
     
     .status-selector{display:flex;flex-wrap:wrap;gap:6px}
     .status-opt{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;font-size:11.5px;font-weight:500;cursor:pointer;transition:all 0.2s;white-space:nowrap}
@@ -99,10 +112,22 @@ var STATUS_OPTIONS=[
   'NO REQUIERE',
   'Por comenzar',
   'En dibujo',
+  'Corrección',
   'En espera de Ing Prof',
   'En espera de Ing Express',
   'Pendiente de informacion (Client)',
   'Terminado'
+];
+
+var DIBUJANTE_OPTIONS=[
+  'NO REQUIERE',
+  'YASMANY',
+  'GUSTAVO',
+  'MAIKRO',
+  'YARIEL',
+  'YOLEXIS',
+  'JANNIK',
+  'YOSVANY'
 ];
 
 var projects=[];
@@ -116,6 +141,7 @@ function statusClass(s){
   if(l.includes('ingprof'))return'st-esperaingprof';
   if(l.includes('ingexpress'))return'st-esperaingexpress';
   if(l.includes('pendiente'))return'st-pendienteinfo';
+  if(l.includes('correccion')||l.includes('corrección'))return'st-correccion';
   if(l.includes('terminado'))return'st-terminado';
   return'st-porcomenzar';
 }
@@ -148,7 +174,10 @@ async function loadProjects(){
       var dw=item.DWSTATUS||item.DWStatus||item.dwstatus||item.Dwstatus||'';
       if(dw&&typeof dw==='object'){dw=dw.Value||dw.value||(dw.results?dw.results[0]:'')||''}
       if(typeof dw!=='string')dw=dw?String(dw):'';
-      return{title:(item.Title||'').toString(),dwstatus:dw};
+      var db=item.DIBUJANTE||item.Dibujante||item.dibujante||'';
+      if(db&&typeof db==='object'){db=db.Value||db.value||(db.results?db.results[0]:'')||''}
+      if(typeof db!=='string')db=db?String(db):'';
+      return{title:(item.Title||'').toString(),dwstatus:dw,dibujante:db};
     }).filter(function(p){return p.title.length>0});
     projects.sort(function(a,b){return a.title.localeCompare(b.title)});
     renderProjects();
@@ -174,13 +203,18 @@ function renderProjects(){
     var sp=splitProject(p.title);
     var stClass=statusClass(p.dwstatus);
     var stLabel=p.dwstatus||'Sin estado';
+    var dbLabel=p.dibujante||'Sin asignar';
     return '<div class="project-card fade-in" style="animation-delay:'+Math.min(i*30,300)+'ms">'+
       '<div class="project-top">'+
         '<div><div class="project-id">'+esc(sp.id)+'</div>'+
         (sp.address?'<div class="project-addr">'+esc(sp.address)+'</div>':'')+
         '</div>'+
-        '<span class="status-current '+stClass+'">'+esc(stLabel)+'</span>'+
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'+
+          '<span class="status-current '+stClass+'">'+esc(stLabel)+'</span>'+
+          '<span class="dib-current">✏️ '+esc(dbLabel)+'</span>'+
+        '</div>'+
       '</div>'+
+      '<div class="field-label">Estado del dibujo</div>'+
       '<div class="status-selector" id="sel-'+i+'">'+
         STATUS_OPTIONS.map(function(opt){
           var isActive=p.dwstatus===opt?'active':'';
@@ -188,46 +222,53 @@ function renderProjects(){
           return '<button class="status-opt '+isActive+'" onclick="updateStatus('+i+',\''+safeOpt+'\')">'+esc(opt)+'</button>';
         }).join('')+
       '</div>'+
+      '<div class="divider"></div>'+
+      '<div class="field-label">Dibujante asignado</div>'+
+      '<div class="dib-selector" id="dib-'+i+'">'+
+        DIBUJANTE_OPTIONS.map(function(opt){
+          var isActive=p.dibujante===opt?'active':'';
+          var safeOpt=opt.replace(/'/g,"\\'");
+          return '<button class="dib-opt '+isActive+'" onclick="updateDibujante('+i+',\''+safeOpt+'\')">'+esc(opt)+'</button>';
+        }).join('')+
+      '</div>'+
     '</div>';
   }).join('');
 }
 
 async function updateStatus(idx,newStatus){
-  var p=projects.filter(function(pr){
-    var q=(document.getElementById('searchBox').value||'').toLowerCase();
-    return q?pr.title.toLowerCase().includes(q):true;
-  })[idx];
-  if(!p)return;
-  
+  var filtered=getFiltered();
+  var p=filtered[idx];if(!p)return;
   if(p.dwstatus===newStatus){showToast('Ya tiene ese estado');return}
-  
-  // Disable buttons while updating
-  var selEl=document.getElementById('sel-'+idx);
-  if(selEl){var btns=selEl.querySelectorAll('button');btns.forEach(function(b){b.disabled=true})}
-  
-  var oldStatus=p.dwstatus;
+  disableButtons('sel-'+idx);
   showToast('Actualizando '+splitProject(p.title).id+'...');
-  
   try{
-    var r=await fetch(FLOW_UPDATE,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({projectTitle:p.title,dwstatus:newStatus})
-    });
-    if(r.ok){
-      p.dwstatus=newStatus;
-      renderProjects();
-      showToast(splitProject(p.title).id+' → '+newStatus);
-    }else{
-      var t=await r.text();
-      showToast('Error: '+t.substring(0,100),true);
-      if(selEl){var btns2=selEl.querySelectorAll('button');btns2.forEach(function(b){b.disabled=false})}
-    }
-  }catch(e){
-    showToast('Error: '+e.message,true);
-    if(selEl){var btns3=selEl.querySelectorAll('button');btns3.forEach(function(b){b.disabled=false})}
-  }
+    var r=await fetch(FLOW_UPDATE,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({projectTitle:p.title,dwstatus:newStatus,dibujante:p.dibujante||''})});
+    if(r.ok){p.dwstatus=newStatus;renderProjects();showToast(splitProject(p.title).id+' → '+newStatus)}
+    else{showToast('Error: '+(await r.text()).substring(0,100),true);enableButtons('sel-'+idx)}
+  }catch(e){showToast('Error: '+e.message,true);enableButtons('sel-'+idx)}
 }
+
+async function updateDibujante(idx,newDib){
+  var filtered=getFiltered();
+  var p=filtered[idx];if(!p)return;
+  if(p.dibujante===newDib){showToast('Ya tiene ese dibujante');return}
+  disableButtons('dib-'+idx);
+  showToast('Asignando '+newDib+'...');
+  try{
+    var r=await fetch(FLOW_UPDATE,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({projectTitle:p.title,dwstatus:p.dwstatus||'',dibujante:newDib})});
+    if(r.ok){p.dibujante=newDib;renderProjects();showToast(splitProject(p.title).id+' → ✏️ '+newDib)}
+    else{showToast('Error: '+(await r.text()).substring(0,100),true);enableButtons('dib-'+idx)}
+  }catch(e){showToast('Error: '+e.message,true);enableButtons('dib-'+idx)}
+}
+
+function getFiltered(){
+  var q=(document.getElementById('searchBox').value||'').toLowerCase();
+  return q?projects.filter(function(pr){return pr.title.toLowerCase().includes(q)}):projects;
+}
+function disableButtons(id){var el=document.getElementById(id);if(el)el.querySelectorAll('button').forEach(function(b){b.disabled=true})}
+function enableButtons(id){var el=document.getElementById(id);if(el)el.querySelectorAll('button').forEach(function(b){b.disabled=false})}
 
 // Load on start
 loadProjects();
