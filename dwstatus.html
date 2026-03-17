@@ -78,6 +78,14 @@
     
     .empty{text-align:center;padding:48px;color:var(--muted);background:var(--card);border-radius:var(--radius);border:1px dashed var(--border)}
     
+    .filters{margin-bottom:16px;display:flex;flex-direction:column;gap:10px}
+    .filter-group{display:flex;align-items:flex-start;gap:8px}
+    .filter-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;min-width:70px;padding-top:7px;flex-shrink:0}
+    .filter-options{display:flex;flex-wrap:wrap;gap:4px}
+    .filter-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;font-size:11px;font-weight:500;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+    .filter-btn:hover{border-color:var(--muted)}
+    .filter-btn.active{border-color:var(--accent);background:rgba(99,102,241,0.15);color:var(--accent2)}
+
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .fade-in{animation:fadeIn 0.3s ease forwards}
   </style>
@@ -96,6 +104,20 @@
 
 <div class="container">
   <input type="text" class="search-box" id="searchBox" placeholder="Buscar por ID o dirección..." oninput="renderProjects()"/>
+  <div class="filters">
+    <div class="filter-group">
+      <div class="filter-label">Dibujante:</div>
+      <div class="filter-options" id="filterDib">
+        <button class="filter-btn active" onclick="setFilterDib('')">Todos</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Estado DW:</div>
+      <div class="filter-options" id="filterStatus">
+        <button class="filter-btn active" onclick="setFilterStatus('')">Todos</button>
+      </div>
+    </div>
+  </div>
   <div class="counter" id="counter"></div>
   <div class="project-list" id="projectList">
     <div class="loading"><div class="loading-spinner"></div><br/>Cargando proyectos...</div>
@@ -131,6 +153,25 @@ var DIBUJANTE_OPTIONS=[
 ];
 
 var projects=[];
+var filterDib=localStorage.getItem('dw_filterDib')||'';
+var filterStatus=localStorage.getItem('dw_filterStatus')||'';
+
+function setFilterDib(v){filterDib=v;localStorage.setItem('dw_filterDib',v);renderFilters();renderProjects()}
+function setFilterStatus(v){filterStatus=v;localStorage.setItem('dw_filterStatus',v);renderFilters();renderProjects()}
+
+function renderFilters(){
+  var dibHtml='<button class="filter-btn '+(filterDib===''?'active':'')+'" onclick="setFilterDib(\'\')">Todos</button>';
+  DIBUJANTE_OPTIONS.forEach(function(d){
+    dibHtml+='<button class="filter-btn '+(filterDib===d?'active':'')+'" onclick="setFilterDib(\''+d.replace(/'/g,"\\'")+'\')">'+esc(d)+'</button>';
+  });
+  document.getElementById('filterDib').innerHTML=dibHtml;
+
+  var stHtml='<button class="filter-btn '+(filterStatus===''?'active':'')+'" onclick="setFilterStatus(\'\')">Todos</button>';
+  STATUS_OPTIONS.forEach(function(s){
+    stHtml+='<button class="filter-btn '+(filterStatus===s?'active':'')+'" onclick="setFilterStatus(\''+s.replace(/'/g,"\\'")+'\')">'+esc(s)+'</button>';
+  });
+  document.getElementById('filterStatus').innerHTML=stHtml;
+}
 
 function statusClass(s){
   if(!s||typeof s!=='string')return'st-porcomenzar';
@@ -180,6 +221,7 @@ async function loadProjects(){
       return{title:(item.Title||'').toString(),dwstatus:dw,dibujante:db};
     }).filter(function(p){return p.title.length>0});
     projects.sort(function(a,b){return a.title.localeCompare(b.title)});
+    renderFilters();
     renderProjects();
     showToast(projects.length+' proyectos cargados');
   }catch(e){
@@ -189,8 +231,7 @@ async function loadProjects(){
 }
 
 function renderProjects(){
-  var q=(document.getElementById('searchBox').value||'').toLowerCase();
-  var filtered=q?projects.filter(function(p){return p.title.toLowerCase().includes(q)}):projects;
+  var filtered=getFiltered();
   
   document.getElementById('counter').textContent=filtered.length+' de '+projects.length+' proyectos';
   
@@ -265,7 +306,12 @@ async function updateDibujante(idx,newDib){
 
 function getFiltered(){
   var q=(document.getElementById('searchBox').value||'').toLowerCase();
-  return q?projects.filter(function(pr){return pr.title.toLowerCase().includes(q)}):projects;
+  return projects.filter(function(pr){
+    if(q&&!pr.title.toLowerCase().includes(q))return false;
+    if(filterDib&&pr.dibujante!==filterDib)return false;
+    if(filterStatus&&pr.dwstatus!==filterStatus)return false;
+    return true;
+  });
 }
 function disableButtons(id){var el=document.getElementById(id);if(el)el.querySelectorAll('button').forEach(function(b){b.disabled=true})}
 function enableButtons(id){var el=document.getElementById(id);if(el)el.querySelectorAll('button').forEach(function(b){b.disabled=false})}
