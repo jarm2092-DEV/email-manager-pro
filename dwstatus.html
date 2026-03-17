@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Estado de Dibujos - Code Clear Permit</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#09090b;--bg2:#18181b;--card:rgba(39,39,42,0.5);--border:rgba(255,255,255,0.08);
+      --text:#f8fafc;--text2:#a1a1aa;--muted:#71717a;--accent:#6366f1;--accent2:#818cf8;
+      --success:#10b981;--warning:#f59e0b;--danger:#ef4444;--info:#3b82f6;
+      --radius:12px;--radius-sm:8px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    
+    .header{background:rgba(9,9,11,0.8);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:20px 24px;position:sticky;top:0;z-index:100}
+    .header-inner{max-width:640px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center;gap:12px}
+    .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),#9333ea);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(99,102,241,0.3)}
+    .logo-text{font-family:'Outfit',sans-serif;font-weight:700;font-size:18px;background:linear-gradient(to right,#fff,#a1a1aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .refresh-btn{padding:8px 16px;border:1px solid var(--border);background:var(--card);color:var(--text2);border-radius:var(--radius-sm);cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;transition:all 0.2s;display:flex;align-items:center;gap:6px}
+    .refresh-btn:hover{background:rgba(63,63,70,0.5);color:var(--text)}
+    
+    .container{max-width:640px;margin:0 auto;padding:24px}
+    
+    .search-box{width:100%;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:14px;transition:all 0.2s;margin-bottom:20px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.1)}
+    .search-box:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,0.15)}
+    .search-box::placeholder{color:var(--muted)}
+    
+    .project-list{display:flex;flex-direction:column;gap:8px}
+    
+    .project-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:all 0.3s;backdrop-filter:blur(8px)}
+    .project-card:hover{border-color:rgba(255,255,255,0.15);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.3)}
+    .project-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px}
+    .project-id{font-family:'Outfit',sans-serif;font-weight:700;font-size:15px;color:var(--accent2)}
+    .project-addr{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4}
+    
+    .status-current{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0}
+    .status-current.st-norequiere{background:rgba(113,113,122,0.2);color:#a1a1aa;border:1px solid rgba(113,113,122,0.3)}
+    .status-current.st-porcomenzar{background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)}
+    .status-current.st-endibujo{background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3)}
+    .status-current.st-esperaingprof{background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3)}
+    .status-current.st-esperaingexpress{background:rgba(236,72,153,0.15);color:#ec4899;border:1px solid rgba(236,72,153,0.3)}
+    .status-current.st-pendienteinfo{background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3)}
+    .status-current.st-terminado{background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)}
+    
+    .status-selector{display:flex;flex-wrap:wrap;gap:6px}
+    .status-opt{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;font-size:11.5px;font-weight:500;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+    .status-opt:hover{border-color:var(--muted);transform:translateY(-1px)}
+    .status-opt:active{transform:scale(0.96)}
+    .status-opt.active{border-color:var(--accent);background:rgba(99,102,241,0.15);color:var(--accent2);box-shadow:0 0 0 1px var(--accent)}
+    .status-opt:disabled{opacity:0.4;cursor:wait;transform:none}
+    
+    .loading{text-align:center;padding:48px;color:var(--muted)}
+    .loading-spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);padding:10px 20px;border-radius:30px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.6);z-index:1000;transition:all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);opacity:0;background:var(--success);color:#0f1117;display:flex;align-items:center;gap:8px;pointer-events:none}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+    .toast.error{background:var(--danger);color:white}
+    
+    .counter{font-size:13px;color:var(--muted);margin-bottom:16px;font-weight:500}
+    
+    .empty{text-align:center;padding:48px;color:var(--muted);background:var(--card);border-radius:var(--radius);border:1px dashed var(--border)}
+    
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .fade-in{animation:fadeIn 0.3s ease forwards}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">✏️</div>
+      <span class="logo-text">Estado de Dibujos</span>
+    </div>
+    <button class="refresh-btn" onclick="loadProjects()">↻ Actualizar</button>
+  </div>
+</div>
+
+<div class="container">
+  <input type="text" class="search-box" id="searchBox" placeholder="Buscar por ID o dirección..." oninput="renderProjects()"/>
+  <div class="counter" id="counter"></div>
+  <div class="project-list" id="projectList">
+    <div class="loading"><div class="loading-spinner"></div><br/>Cargando proyectos...</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
+var FLOW_UPDATE='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/be2bfa5cf07e40d19308042973ba43f7/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=-TD_mvihfVsMO_rrc1h-eqvKmUcnavHOxRsUVkgBEhA';
+
+var STATUS_OPTIONS=[
+  'NO REQUIERE',
+  'Por comenzar',
+  'En dibujo',
+  'En espera de Ing Prof',
+  'En espera de Ing Express',
+  'Pendiente de informacion (Client)',
+  'Terminado'
+];
+
+var projects=[];
+
+function statusClass(s){
+  if(!s)return'st-porcomenzar';
+  var l=s.toLowerCase().replace(/\s+/g,'');
+  if(l.includes('norequiere'))return'st-norequiere';
+  if(l.includes('porcomenzar'))return'st-porcomenzar';
+  if(l.includes('endibujo'))return'st-endibujo';
+  if(l.includes('ingprof'))return'st-esperaingprof';
+  if(l.includes('ingexpress'))return'st-esperaingexpress';
+  if(l.includes('pendiente'))return'st-pendienteinfo';
+  if(l.includes('terminado'))return'st-terminado';
+  return'st-porcomenzar';
+}
+
+function splitProject(full){
+  if(!full)return{id:'',address:''};
+  var m=full.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);
+  if(m)return{id:m[1].toUpperCase(),address:(m[2]||'').replace(/^-\s*/,'').trim()};
+  return{id:full,address:''};
+}
+
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+
+function showToast(msg,err){
+  var el=document.getElementById('toast');
+  el.innerHTML=(err?'⚠️':'✅')+' '+esc(msg);
+  el.className='toast show'+(err?' error':'');
+  clearTimeout(el._t);
+  el._t=setTimeout(function(){el.className='toast'},3000);
+}
+
+async function loadProjects(){
+  document.getElementById('projectList').innerHTML='<div class="loading"><div class="loading-spinner"></div><br/>Cargando proyectos...</div>';
+  try{
+    var r=await fetch(FLOW_READ,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    if(!r.ok){showToast('Error cargando: HTTP '+r.status,true);return}
+    var data=await r.json();
+    if(!Array.isArray(data)){showToast('Respuesta inesperada',true);return}
+    projects=data.map(function(item){
+      return{
+        title:item.Title||'',
+        dwstatus:item.DWSTATUS||item.DWStatus||item.dwstatus||''
+      };
+    }).filter(function(p){return p.title.length>0});
+    projects.sort(function(a,b){return a.title.localeCompare(b.title)});
+    renderProjects();
+    showToast(projects.length+' proyectos cargados');
+  }catch(e){
+    showToast('Error: '+e.message,true);
+    document.getElementById('projectList').innerHTML='<div class="empty">Error al cargar. Verifica tu conexión.</div>';
+  }
+}
+
+function renderProjects(){
+  var q=(document.getElementById('searchBox').value||'').toLowerCase();
+  var filtered=q?projects.filter(function(p){return p.title.toLowerCase().includes(q)}):projects;
+  
+  document.getElementById('counter').textContent=filtered.length+' de '+projects.length+' proyectos';
+  
+  if(!filtered.length){
+    document.getElementById('projectList').innerHTML=q?'<div class="empty">Sin resultados para "'+esc(q)+'"</div>':'<div class="empty">No hay proyectos.</div>';
+    return;
+  }
+  
+  document.getElementById('projectList').innerHTML=filtered.map(function(p,i){
+    var sp=splitProject(p.title);
+    var stClass=statusClass(p.dwstatus);
+    var stLabel=p.dwstatus||'Sin estado';
+    return '<div class="project-card fade-in" style="animation-delay:'+Math.min(i*30,300)+'ms">'+
+      '<div class="project-top">'+
+        '<div><div class="project-id">'+esc(sp.id)+'</div>'+
+        (sp.address?'<div class="project-addr">'+esc(sp.address)+'</div>':'')+
+        '</div>'+
+        '<span class="status-current '+stClass+'">'+esc(stLabel)+'</span>'+
+      '</div>'+
+      '<div class="status-selector" id="sel-'+i+'">'+
+        STATUS_OPTIONS.map(function(opt){
+          var isActive=p.dwstatus===opt?'active':'';
+          return '<button class="status-opt '+isActive+'" onclick="updateStatus('+i+',\''+esc(opt).replace(/'/g,"\\'")+'\')">'+esc(opt)+'</button>';
+        }).join('')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+async function updateStatus(idx,newStatus){
+  var p=projects.filter(function(pr){
+    var q=(document.getElementById('searchBox').value||'').toLowerCase();
+    return q?pr.title.toLowerCase().includes(q):true;
+  })[idx];
+  if(!p)return;
+  
+  if(p.dwstatus===newStatus){showToast('Ya tiene ese estado');return}
+  
+  // Disable buttons while updating
+  var selEl=document.getElementById('sel-'+idx);
+  if(selEl){var btns=selEl.querySelectorAll('button');btns.forEach(function(b){b.disabled=true})}
+  
+  var oldStatus=p.dwstatus;
+  showToast('Actualizando '+splitProject(p.title).id+'...');
+  
+  try{
+    var r=await fetch(FLOW_UPDATE,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({projectTitle:p.title,dwstatus:newStatus})
+    });
+    if(r.ok){
+      p.dwstatus=newStatus;
+      renderProjects();
+      showToast(splitProject(p.title).id+' → '+newStatus);
+    }else{
+      var t=await r.text();
+      showToast('Error: '+t.substring(0,100),true);
+      if(selEl){var btns2=selEl.querySelectorAll('button');btns2.forEach(function(b){b.disabled=false})}
+    }
+  }catch(e){
+    showToast('Error: '+e.message,true);
+    if(selEl){var btns3=selEl.querySelectorAll('button');btns3.forEach(function(b){b.disabled=false})}
+  }
+}
+
+// Load on start
+loadProjects();
+</script>
+</body>
+</html>
