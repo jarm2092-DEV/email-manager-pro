@@ -67,21 +67,27 @@
     .legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
     .legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 
-    /* Detail panel */
-    .detail-panel{background:var(--surface);border:1px solid var(--accent);border-radius:var(--radius);margin-bottom:24px;overflow:hidden;display:none;animation:slideDown 0.3s ease}
-    .detail-panel.open{display:block}
-    .detail-header{padding:16px 24px;background:rgba(124,92,252,0.06);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
-    .detail-header-name{font-size:18px;font-weight:700;color:var(--accent2)}
-    .detail-header-stats{display:flex;gap:16px;font-size:12px;color:var(--text2)}
-    .detail-header-stats strong{color:var(--text);font-family:'JetBrains Mono',monospace}
-    .detail-close{width:32px;height:32px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all 0.2s}
-    .detail-close:hover{background:var(--red-s);color:var(--red);border-color:var(--red)}
-    .detail-projects{padding:16px 24px;max-height:400px;overflow-y:auto}
-    .dp-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;transition:all 0.15s}
+    /* Modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:200;display:none;align-items:center;justify-content:center;padding:24px;animation:fadeIn 0.2s ease}
+    .modal-overlay.open{display:flex}
+    .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);width:100%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,0.6);animation:modalIn 0.3s cubic-bezier(0.16,1,0.3,1)}
+    @keyframes modalIn{from{opacity:0;transform:scale(0.95) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+    .modal-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0}
+    .modal-name{font-size:20px;font-weight:800;letter-spacing:-0.5px}
+    .modal-stats{display:flex;gap:16px;font-size:12px;color:var(--text2);margin-top:4px}
+    .modal-stats strong{color:var(--text);font-family:'JetBrains Mono',monospace}
+    .modal-close{width:36px;height:36px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all 0.2s;flex-shrink:0}
+    .modal-close:hover{background:var(--red-s);color:var(--red);border-color:var(--red)}
+    .modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+    .modal-summary{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .modal-chip{padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
+    .modal-chip .chip-n{font-family:'JetBrains Mono',monospace;font-weight:700}
+    .dp-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:10px;border:1px solid var(--border);margin-bottom:6px;transition:all 0.15s}
     .dp-item:hover{background:var(--surface2);border-color:var(--border2)}
-    .dp-id{font-weight:700;font-size:13px;color:var(--text);min-width:80px}
+    .dp-id{font-weight:700;font-size:13px;color:var(--text);min-width:90px}
     .dp-addr{font-size:11px;color:var(--muted);flex:1;margin:0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .dp-status{padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;white-space:nowrap}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
     /* Table */
     .detail-table{width:100%;border-collapse:collapse}
@@ -95,7 +101,6 @@
     .loading-full{text-align:center;padding:80px;color:var(--muted)}
     .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    @keyframes slideDown{from{opacity:0;max-height:0}to{opacity:1;max-height:600px}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     .anim{animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards;opacity:0}
     @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.filters-bar{flex-direction:column;align-items:flex-start}.filter-sep{display:none}}
@@ -124,7 +129,9 @@
     <button class="fbtn" onclick="clearFilters()" style="color:var(--red);border-color:rgba(239,68,68,0.3)">✕ Limpiar</button>
   </div>
 
-  <div id="detailPanel" class="detail-panel"></div>
+  <div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeDetail()">
+    <div class="modal" id="modalContent"></div>
+  </div>
   <div class="kpi-row" id="kpis"><div class="loading-full" style="grid-column:1/-1"><div class="spinner"></div></div></div>
   <div class="grid-2" id="row1"></div>
   <div class="grid-2" id="row2"></div>
@@ -206,7 +213,7 @@ function renderAll(){
   document.getElementById('row2').innerHTML='<div class="card anim" style="animation-delay:400ms"><div class="card-title"><span>📈</span> Desglose por Dibujante</div><div class="bar-chart">'+stacked+'</div><div class="legend">'+leg+'</div></div><div class="card anim" style="animation-delay:450ms"><div class="card-title"><span>⚖️</span> Balance de Carga</div>'+gauge+'</div>';
 
   // Table
-  var rows=dd.map(d=>{var enD=d.ps.filter(p=>p.st==='En dibujo').length,cor=d.ps.filter(p=>p.st==='Corrección').length,pc=d.ps.filter(p=>p.st==='Por comenzar').length,esp=d.ps.filter(p=>p.st&&p.st.includes('espera')).length,pi=d.ps.filter(p=>p.st&&p.st.includes('Pendiente')).length,lp=mx>0?Math.round(d.activos/mx*100):0,lc=lp>80?'var(--red)':lp>50?'var(--amber)':'var(--green)';return'<tr onclick="toggleDetail(\''+d.name+'\')"><td class="td-name" style="color:'+d.color+'">'+esc(d.name)+'</td><td><span style="font-family:JetBrains Mono;font-weight:600">'+d.total+'</span></td><td><span class="td-badge" style="background:var(--blue-s);color:var(--blue)">'+enD+'</span></td><td><span class="td-badge" style="background:var(--red-s);color:var(--red)">'+cor+'</span></td><td><span class="td-badge" style="background:var(--amber-s);color:var(--amber)">'+pc+'</span></td><td><span class="td-badge" style="background:var(--purple-s);color:var(--purple)">'+esp+'</span></td><td><span class="td-badge" style="background:var(--orange-s);color:var(--orange)">'+pi+'</span></td><td><span class="td-badge" style="background:var(--green-s);color:var(--green)">'+d.terminados+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:'+lc+'">'+lp+'%</span></td></tr>'}).join('');
+  var rows=dd.map(d=>{var enD=d.ps.filter(p=>p.st==='En dibujo').length,cor=d.ps.filter(p=>p.st==='Corrección').length,pc=d.ps.filter(p=>p.st==='Por comenzar').length,esp=d.ps.filter(p=>p.st&&p.st.includes('espera')).length,pi=d.ps.filter(p=>p.st&&p.st.includes('Pendiente')).length,lp=total>0?Math.round(d.activos/total*100):0,lc=lp>15?'var(--red)':lp>8?'var(--amber)':'var(--green)';return'<tr onclick="toggleDetail(\''+d.name+'\')"><td class="td-name" style="color:'+d.color+'">'+esc(d.name)+'</td><td><span style="font-family:JetBrains Mono;font-weight:600">'+d.total+'</span></td><td><span class="td-badge" style="background:var(--blue-s);color:var(--blue)">'+enD+'</span></td><td><span class="td-badge" style="background:var(--red-s);color:var(--red)">'+cor+'</span></td><td><span class="td-badge" style="background:var(--amber-s);color:var(--amber)">'+pc+'</span></td><td><span class="td-badge" style="background:var(--purple-s);color:var(--purple)">'+esp+'</span></td><td><span class="td-badge" style="background:var(--orange-s);color:var(--orange)">'+pi+'</span></td><td><span class="td-badge" style="background:var(--green-s);color:var(--green)">'+d.terminados+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:'+lc+'">'+lp+'%</span></td></tr>'}).join('');
   document.getElementById('tableCard').innerHTML='<div class="card-title"><span>📋</span> Detalle por Dibujante <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">clic en fila para ver proyectos</span></div><div style="overflow-x:auto"><table class="detail-table"><thead><tr><th>Dibujante</th><th>Total</th><th>En Dibujo</th><th>Corrección</th><th>Por Comenzar</th><th>Espera</th><th>Pend. Info</th><th>Terminados</th><th>Carga</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 
   // Re-render detail if open
@@ -215,16 +222,30 @@ function renderAll(){
 
 function toggleDetail(name){
   if(selectedDib===name){closeDetail();return}
-  selectedDib=name;showDetail(name);renderAll();
+  selectedDib=name;showDetail(name);
 }
-function closeDetail(){selectedDib='';document.getElementById('detailPanel').className='detail-panel';document.getElementById('detailPanel').innerHTML=''}
+function closeDetail(){selectedDib='';document.getElementById('modalOverlay').className='modal-overlay';document.getElementById('modalContent').innerHTML=''}
 function showDetail(name){
   var ps=filtered().filter(p=>p.dib===name);
+  var total=filtered().length;
   var ci=DIBS.indexOf(name);var color=DC[ci>=0?ci:0];
   var activos=ps.filter(p=>!['Terminado','NO REQUIERE'].includes(p.st)).length;
+
+  // Summary chips per status
+  var chips='';
+  ST_ORDER.forEach(s=>{var c=ps.filter(p=>p.st===s).length;if(c)chips+='<div class="modal-chip" style="background:'+(ST_BG[s]||'var(--surface2)')+';color:'+(ST_C[s]||'var(--muted)')+'"><span class="chip-n">'+c+'</span> '+esc(s)+'</div>'});
+
   var items=ps.sort((a,b)=>{var ai=ST_ORDER.indexOf(a.st),bi=ST_ORDER.indexOf(b.st);return(ai<0?99:ai)-(bi<0?99:bi)}).map(p=>{var sp=splitP(p.title);var sc=ST_C[p.st]||'var(--muted)';var sb=ST_BG[p.st]||'var(--surface2)';return'<div class="dp-item"><div class="dp-id" style="color:'+color+'">'+esc(sp.id)+'</div><div class="dp-addr">'+esc(sp.addr)+'</div><div class="dp-status" style="background:'+sb+';color:'+sc+'">'+esc(p.st||'Sin estado')+'</div></div>'}).join('');
-  document.getElementById('detailPanel').className='detail-panel open';
-  document.getElementById('detailPanel').innerHTML='<div class="detail-header"><div><div class="detail-header-name" style="color:'+color+'">'+esc(name)+'</div><div class="detail-header-stats"><span><strong>'+ps.length+'</strong> total</span><span><strong>'+activos+'</strong> activos</span></div></div><button class="detail-close" onclick="closeDetail();renderAll()">✕</button></div><div class="detail-projects">'+(items||'<div style="padding:20px;text-align:center;color:var(--muted)">Sin proyectos asignados</div>')+'</div>';
+
+  var pct=total>0?Math.round(activos/total*100):0;
+
+  document.getElementById('modalContent').innerHTML=
+    '<div class="modal-header"><div><div class="modal-name" style="color:'+color+'">'+esc(name)+'</div>'+
+    '<div class="modal-stats"><span><strong>'+ps.length+'</strong> total</span><span><strong>'+activos+'</strong> activos</span><span><strong>'+pct+'%</strong> de carga</span></div></div>'+
+    '<button class="modal-close" onclick="closeDetail()">✕</button></div>'+
+    '<div class="modal-body"><div class="modal-summary">'+chips+'</div>'+
+    (items||'<div style="padding:20px;text-align:center;color:var(--muted)">Sin proyectos asignados</div>')+'</div>';
+  document.getElementById('modalOverlay').className='modal-overlay open';
 }
 
 function kpi(v,l,g){return'<div class="kpi anim" style="animation-delay:100ms"><div class="kpi-accent" style="background:'+g+'"></div><div class="kpi-value">'+v+'</div><div class="kpi-label">'+l+'</div></div>'}
