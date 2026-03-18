@@ -130,29 +130,27 @@
 var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
 var FLOW_UPDATE='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/be2bfa5cf07e40d19308042973ba43f7/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=-TD_mvihfVsMO_rrc1h-eqvKmUcnavHOxRsUVkgBEhA';
 
-var STATUS_OPTIONS=[
-  'NO REQUIERE',
-  'Por comenzar',
-  'En dibujo',
-  'Corrección',
-  'En espera de Ing Prof',
-  'En espera de Ing Express',
-  'Pendiente de informacion (Client)',
-  'Terminado'
-];
-
-var DIBUJANTE_OPTIONS=[
-  'NO REQUIERE',
-  'YASMANY',
-  'GUSTAVO',
-  'MAIKRO',
-  'YARIEL',
-  'YOSVANY'
-];
+var STATUS_OPTIONS=[];
+var DIBUJANTE_OPTIONS=[];
 
 var projects=[];
 var filterDib=localStorage.getItem('dw_filterDib')||'';
 var filterStatus=localStorage.getItem('dw_filterStatus')||'';
+
+function buildOptions(){
+  // Extract unique statuses from data, known order first
+  var knownSt=['NO REQUIERE','Por comenzar','En dibujo','Corrección','En espera de Ing Prof','En espera de Ing Express','Pendiente de informacion (Client)','Terminado'];
+  var stSet={};projects.forEach(function(p){if(p.dwstatus)stSet[p.dwstatus]=true});
+  STATUS_OPTIONS=[];
+  knownSt.forEach(function(s){if(stSet[s]){STATUS_OPTIONS.push(s);delete stSet[s]}});
+  Object.keys(stSet).sort().forEach(function(s){STATUS_OPTIONS.push(s)});
+  // Extract unique dibujantes
+  var knownDib=['NO REQUIERE'];
+  var dibSet={};projects.forEach(function(p){if(p.dibujante)dibSet[p.dibujante]=true});
+  DIBUJANTE_OPTIONS=[];
+  knownDib.forEach(function(d){if(dibSet[d]){DIBUJANTE_OPTIONS.push(d);delete dibSet[d]}});
+  Object.keys(dibSet).sort().forEach(function(d){DIBUJANTE_OPTIONS.push(d)});
+}
 
 function setFilterDib(v){filterDib=v;localStorage.setItem('dw_filterDib',v);renderFilters();renderProjects()}
 function setFilterStatus(v){filterStatus=v;localStorage.setItem('dw_filterStatus',v);renderFilters();renderProjects()}
@@ -219,6 +217,7 @@ async function loadProjects(){
       return{title:(item.Title||'').toString(),dwstatus:dw,dibujante:db};
     }).filter(function(p){return p.title.length>0});
     projects.sort(function(a,b){return a.title.localeCompare(b.title)});
+    buildOptions();
     renderFilters();
     renderProjects();
     showToast(projects.length+' proyectos cargados');

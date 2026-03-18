@@ -142,12 +142,45 @@
 
 <script>
 var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
-var DIBS=['YASMANY','GUSTAVO','MAIKRO','YARIEL','YOLEXIS','JANNIK','YOSVANY'];
-var ST_ORDER=['Por comenzar','En dibujo','Corrección','En espera de Ing Prof','En espera de Ing Express','Pendiente de informacion (Client)','Terminado','NO REQUIERE'];
-var ST_C={'Por comenzar':'var(--amber)','En dibujo':'var(--blue)','Corrección':'var(--red)','En espera de Ing Prof':'var(--purple)','En espera de Ing Express':'var(--pink)','Pendiente de informacion (Client)':'var(--orange)','Terminado':'var(--green)','NO REQUIERE':'var(--muted)'};
-var ST_BG={'Por comenzar':'var(--amber-s)','En dibujo':'var(--blue-s)','Corrección':'var(--red-s)','En espera de Ing Prof':'var(--purple-s)','En espera de Ing Express':'var(--pink-s)','Pendiente de informacion (Client)':'var(--orange-s)','Terminado':'var(--green-s)','NO REQUIERE':'rgba(85,85,106,0.15)'};
-var DC=['#7c5cfc','#22c55e','#3b82f6','#eab308','#ec4899','#f97316','#06b6d4'];
+var DIBS=[];
+var ST_ORDER=[];
+// Color palettes for dynamic assignment
+var COLOR_POOL=['#7c5cfc','#22c55e','#3b82f6','#eab308','#ec4899','#f97316','#06b6d4','#a855f7','#ef4444','#14b8a6','#8b5cf6','#d946ef','#64748b','#84cc16'];
+var ST_COLOR_MAP={};  // dynamically built
+var ST_BG_MAP={};
+var DC=[];
 var allProjects=[],fDib='',fSt='',selectedDib='';
+
+function hexToRgba(hex,a){var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
+
+// Known status colors (preferred); unknown statuses get auto-assigned
+var KNOWN_ST_COLORS={'Por comenzar':'#eab308','En dibujo':'#3b82f6','Corrección':'#ef4444','En espera de Ing Prof':'#a855f7','En espera de Ing Express':'#ec4899','Pendiente de informacion (Client)':'#f97316','Terminado':'#22c55e','NO REQUIERE':'#55556a'};
+var extraColorIdx=0;
+var EXTRA_COLORS=['#06b6d4','#d946ef','#84cc16','#14b8a6','#8b5cf6','#64748b','#fb923c','#38bdf8'];
+
+function getStColor(st){
+  if(KNOWN_ST_COLORS[st])return KNOWN_ST_COLORS[st];
+  if(!ST_COLOR_MAP[st]){ST_COLOR_MAP[st]=EXTRA_COLORS[extraColorIdx%EXTRA_COLORS.length];extraColorIdx++}
+  return ST_COLOR_MAP[st];
+}
+function getStBg(st){var c=getStColor(st);return hexToRgba(c,0.12)}
+
+function buildDynamicLists(){
+  // Extract unique dibujantes with projects (exclude empty and NO REQUIERE)
+  var dibSet={};
+  allProjects.forEach(p=>{if(p.dib&&p.dib!=='NO REQUIERE')dibSet[p.dib]=true});
+  DIBS=Object.keys(dibSet).sort();
+  DC=DIBS.map((d,i)=>COLOR_POOL[i%COLOR_POOL.length]);
+
+  // Extract unique statuses, put known ones first in preferred order, then unknowns
+  var stSet={};
+  allProjects.forEach(p=>{if(p.st)stSet[p.st]=true});
+  var knownOrder=['Por comenzar','En dibujo','Corrección','En espera de Ing Prof','En espera de Ing Express','Pendiente de informacion (Client)','Terminado','NO REQUIERE'];
+  ST_ORDER=[];
+  knownOrder.forEach(s=>{if(stSet[s]){ST_ORDER.push(s);delete stSet[s]}});
+  // Add any new/unknown statuses at the end
+  Object.keys(stSet).sort().forEach(s=>{ST_ORDER.push(s)});
+}
 
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 function splitP(f){if(!f)return{id:'',addr:''};var m=f.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);return m?{id:m[1].toUpperCase(),addr:(m[2]||'').replace(/^-\s*/,'').trim()}:{id:f,addr:''}}
@@ -177,6 +210,7 @@ async function loadData(){
       return{title:(it.Title||'').toString(),st:dw,dib:db,modified:it.cambioDw||it.CambioDw||it.cambiodw||it.Modified||it.modified||''};
     }).filter(p=>p.title.length>0);
     document.getElementById('timestamp').textContent=new Date().toLocaleString('es-ES');
+    buildDynamicLists();
     renderAll();
   }catch(e){document.getElementById('kpis').innerHTML='<div class="loading-full" style="grid-column:1/-1;color:var(--red)">Error: '+esc(e.message)+'</div>'}
 }
@@ -202,13 +236,13 @@ function renderAll(){
   var bars=dd.map((d,i)=>'<div class="bar-row '+(selectedDib===d.name?'selected':'')+'" onclick="toggleDetail(\''+d.name+'\')"><div class="bar-name">'+esc(d.name)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(d.activos/mx*100)+'%;background:'+d.color+'"><span class="bar-num">'+d.activos+'</span></div></div></div>').join('');
 
   // Status dist
-  var stH=ST_ORDER.map(s=>{var c=ps.filter(p=>p.st===s).length;return'<div class="status-card '+(fSt===s?'on':'')+'" onclick="setFSt(\''+s.replace(/'/g,"\\'")+'\')" style="border-color:'+(ST_C[s]||'var(--muted)')+'20"><div class="status-val" style="color:'+(ST_C[s]||'var(--muted)')+'">'+c+'</div><div class="status-name">'+esc(s)+'</div></div>'}).join('');
+  var stH=ST_ORDER.map(s=>{var c=ps.filter(p=>p.st===s).length;return'<div class="status-card '+(fSt===s?'on':'')+'" onclick="setFSt(\''+s.replace(/'/g,"\\'")+'\')" style="border-color:'+(getStColor(s)||'var(--muted)')+'20"><div class="status-val" style="color:'+(getStColor(s)||'var(--muted)')+'">'+c+'</div><div class="status-name">'+esc(s)+'</div></div>'}).join('');
 
   document.getElementById('row1').innerHTML='<div class="card anim" style="animation-delay:200ms"><div class="card-title"><span>📊</span> Carga Activa por Dibujante <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">clic para detalles</span></div><div class="bar-chart">'+bars+'</div></div><div class="card anim" style="animation-delay:300ms"><div class="card-title"><span>🎯</span> Distribución por Estado <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">clic para filtrar</span></div><div class="status-grid">'+stH+'</div></div>';
 
   // Stacked
-  var stacked=dd.map(d=>{var segs='';ST_ORDER.filter(s=>s!=='NO REQUIERE').forEach(s=>{var c=d.ps.filter(p=>p.st===s).length;if(c){var pct=Math.round(c/Math.max(d.total,1)*100);segs+='<div class="stacked-seg" style="width:'+Math.max(pct,4)+'%;background:'+ST_C[s]+'">'+c+'</div>'}});if(!segs)segs='<div class="stacked-seg" style="width:100%;background:var(--surface2);color:var(--muted)">0</div>';return'<div class="bar-row" onclick="toggleDetail(\''+d.name+'\')"><div class="bar-name">'+esc(d.name)+'</div><div class="bar-track" style="background:transparent"><div class="stacked-bar" style="width:100%">'+segs+'</div></div></div>'}).join('');
-  var leg=ST_ORDER.filter(s=>s!=='NO REQUIERE').map(s=>'<div class="legend-item"><div class="legend-dot" style="background:'+ST_C[s]+'"></div>'+esc(s)+'</div>').join('');
+  var stacked=dd.map(d=>{var segs='';ST_ORDER.filter(s=>s!=='NO REQUIERE').forEach(s=>{var c=d.ps.filter(p=>p.st===s).length;if(c){var pct=Math.round(c/Math.max(d.total,1)*100);segs+='<div class="stacked-seg" style="width:'+Math.max(pct,4)+'%;background:'+getStColor(s)+'">'+c+'</div>'}});if(!segs)segs='<div class="stacked-seg" style="width:100%;background:var(--surface2);color:var(--muted)">0</div>';return'<div class="bar-row" onclick="toggleDetail(\''+d.name+'\')"><div class="bar-name">'+esc(d.name)+'</div><div class="bar-track" style="background:transparent"><div class="stacked-bar" style="width:100%">'+segs+'</div></div></div>'}).join('');
+  var leg=ST_ORDER.filter(s=>s!=='NO REQUIERE').map(s=>'<div class="legend-item"><div class="legend-dot" style="background:'+getStColor(s)+'"></div>'+esc(s)+'</div>').join('');
 
   // Balance
   var avg=DIBS.length?Math.round(dd.reduce((a,d)=>a+d.activos,0)/DIBS.length):0;
@@ -272,10 +306,10 @@ function renderAll(){
 
   // ── Alerts ──
   var ALERT_RULES=[
-    {status:'Pendiente de informacion (Client)',days:3,icon:'📞',label:'Pend. Info Cliente',color:'var(--orange)',bg:'var(--orange-s)'},
-    {status:'Corrección',days:2,icon:'🔧',label:'Corrección',color:'var(--red)',bg:'var(--red-s)'},
-    {status:'En espera de Ing Prof',days:5,icon:'⏳',label:'Espera Ing. Prof',color:'var(--purple)',bg:'var(--purple-s)'},
-    {status:'En espera de Ing Express',days:5,icon:'⏳',label:'Espera Ing. Express',color:'var(--pink)',bg:'var(--pink-s)'}
+    {status:'Pendiente de informacion (Client)',days:3,icon:'📞',label:'Pend. Info Cliente'},
+    {status:'Corrección',days:2,icon:'🔧',label:'Corrección'},
+    {status:'En espera de Ing Prof',days:5,icon:'⏳',label:'Espera Ing. Prof'},
+    {status:'En espera de Ing Express',days:5,icon:'⏳',label:'Espera Ing. Express'}
   ];
   var now=new Date();
   var alerts=[];
@@ -298,16 +332,16 @@ function renderAll(){
     alertsHTML='<div class="card" style="margin-bottom:24px;border-color:rgba(239,68,68,0.2)"><div class="card-title"><span>🚨</span> Alertas de Tiempo ('+alerts.length+') <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">Proyectos que exceden el tiempo máximo en su estado</span></div>';
     alertsHTML+='<div style="display:flex;flex-direction:column;gap:6px">';
     alerts.forEach(function(a){
-      var urgency=a.days>a.rule.days*2?'🔴':'🟡';
-      alertsHTML+='<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:'+a.rule.bg+';border:1px solid '+a.rule.color+'20;border-radius:var(--radius-sm);transition:all 0.15s">';
+      var ac=getStColor(a.status),ab=getStBg(a.status);
+      alertsHTML+='<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:'+ab+';border:1px solid '+ac+'20;border-radius:var(--radius-sm);transition:all 0.15s">';
       alertsHTML+='<div style="font-size:18px;flex-shrink:0">'+a.rule.icon+'</div>';
       alertsHTML+='<div style="flex:1;min-width:0">';
       alertsHTML+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong style="color:var(--text);font-size:13px">'+esc(a.id)+'</strong>';
-      alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:'+a.rule.bg+';color:'+a.rule.color+';border:1px solid '+a.rule.color+'30">'+esc(a.rule.label)+'</span>';
+      alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:'+ab+';color:'+ac+'">'+esc(a.rule.label)+'</span>';
       alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:var(--surface2);color:var(--text2)">✏️ '+esc(a.dib||'Sin asignar')+'</span></div>';
       alertsHTML+='<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(a.addr)+'</div>';
       alertsHTML+='</div>';
-      alertsHTML+='<div style="text-align:right;flex-shrink:0"><div style="font-family:JetBrains Mono;font-size:20px;font-weight:700;color:'+a.rule.color+'">'+a.days+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">días</div></div>';
+      alertsHTML+='<div style="text-align:right;flex-shrink:0"><div style="font-family:JetBrains Mono;font-size:20px;font-weight:700;color:'+ac+'">'+a.days+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">días</div></div>';
       alertsHTML+='</div>';
     });
     alertsHTML+='</div></div>';
@@ -333,10 +367,10 @@ function showDetail(name){
 
   // Summary chips per status
   var chips='';
-  ST_ORDER.forEach(s=>{var c=ps.filter(p=>p.st===s).length;if(c)chips+='<div class="modal-chip" style="background:'+(ST_BG[s]||'var(--surface2)')+';color:'+(ST_C[s]||'var(--muted)')+'"><span class="chip-n">'+c+'</span> '+esc(s)+'</div>'});
+  ST_ORDER.forEach(s=>{var c=ps.filter(p=>p.st===s).length;if(c)chips+='<div class="modal-chip" style="background:'+(getStBg(s)||'var(--surface2)')+';color:'+(getStColor(s)||'var(--muted)')+'"><span class="chip-n">'+c+'</span> '+esc(s)+'</div>'});
 
   var nowM=new Date();
-  var items=ps.sort((a,b)=>{var ai=ST_ORDER.indexOf(a.st),bi=ST_ORDER.indexOf(b.st);return(ai<0?99:ai)-(bi<0?99:bi)}).map(p=>{var sp=splitP(p.title);var sc=ST_C[p.st]||'var(--muted)';var sb=ST_BG[p.st]||'var(--surface2)';var daysStr='';if(p.modified){var md=new Date(p.modified);if(!isNaN(md)){var dd=Math.floor((nowM-md)/864e5);if(dd>0)daysStr='<span style="font-family:JetBrains Mono;font-size:10px;color:var(--muted);margin-left:4px">'+ dd+'d</span>'}};return'<div class="dp-item"><div class="dp-id" style="color:'+color+'">'+esc(sp.id)+'</div><div class="dp-addr">'+esc(sp.addr)+'</div><div class="dp-status" style="background:'+sb+';color:'+sc+'">'+esc(p.st||'Sin estado')+daysStr+'</div></div>'}).join('');
+  var items=ps.sort((a,b)=>{var ai=ST_ORDER.indexOf(a.st),bi=ST_ORDER.indexOf(b.st);return(ai<0?99:ai)-(bi<0?99:bi)}).map(p=>{var sp=splitP(p.title);var sc=getStColor(p.st)||'var(--muted)';var sb=getStBg(p.st)||'var(--surface2)';var daysStr='';if(p.modified){var md=new Date(p.modified);if(!isNaN(md)){var dd=Math.floor((nowM-md)/864e5);if(dd>0)daysStr='<span style="font-family:JetBrains Mono;font-size:10px;color:var(--muted);margin-left:4px">'+ dd+'d</span>'}};return'<div class="dp-item"><div class="dp-id" style="color:'+color+'">'+esc(sp.id)+'</div><div class="dp-addr">'+esc(sp.addr)+'</div><div class="dp-status" style="background:'+sb+';color:'+sc+'">'+esc(p.st||'Sin estado')+daysStr+'</div></div>'}).join('');
 
   var allActivos=filtered().filter(p=>p.st&&p.st!=='Terminado'&&p.st!=='NO REQUIERE').length;
   var pct=allActivos>0?Math.round(activos/allActivos*100):0;
