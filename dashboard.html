@@ -132,11 +132,11 @@
   <div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeDetail()">
     <div class="modal" id="modalContent"></div>
   </div>
+  <div id="alertsContainer"></div>
   <div class="kpi-row" id="kpis"><div class="loading-full" style="grid-column:1/-1"><div class="spinner"></div></div></div>
   <div class="grid-2" id="row1"></div>
   <div class="grid-2" id="row2"></div>
   <div class="card anim" style="animation-delay:500ms" id="tableCard"></div>
-  <div id="alertsContainer"></div>
   <div id="recsContainer"></div>
 </div>
 
@@ -174,7 +174,7 @@ async function loadData(){
     allProjects=data.map(it=>{
       var dw=it.DWSTATUS||it.DWStatus||it.dwstatus||'';if(dw&&typeof dw==='object')dw=dw.Value||'';if(typeof dw!=='string')dw='';
       var db=it.DIBUJANTE||it.Dibujante||it.dibujante||'';if(db&&typeof db==='object')db=db.Value||'';if(typeof db!=='string')db='';
-      return{title:(it.Title||'').toString(),st:dw,dib:db,modified:it.Modified||it.modified||''};
+      return{title:(it.Title||'').toString(),st:dw,dib:db,modified:it.cambioDw||it.CambioDw||it.cambiodw||it.Modified||it.modified||''};
     }).filter(p=>p.title.length>0);
     document.getElementById('timestamp').textContent=new Date().toLocaleString('es-ES');
     renderAll();
@@ -207,7 +207,7 @@ function renderAll(){
   document.getElementById('row1').innerHTML='<div class="card anim" style="animation-delay:200ms"><div class="card-title"><span>📊</span> Carga Activa por Dibujante <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">clic para detalles</span></div><div class="bar-chart">'+bars+'</div></div><div class="card anim" style="animation-delay:300ms"><div class="card-title"><span>🎯</span> Distribución por Estado <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">clic para filtrar</span></div><div class="status-grid">'+stH+'</div></div>';
 
   // Stacked
-  var stacked=dd.map(d=>{var segs='';ST_ORDER.filter(s=>s!=='NO REQUIERE').forEach(s=>{var c=d.ps.filter(p=>p.st===s).length;if(c){var pct=Math.round(c/Math.max(d.total,1)*100);segs+='<div class="stacked-seg" style="width:'+pct+'%;background:'+ST_C[s]+'">'+(pct>=8?c:'')+'</div>'}});if(!segs)segs='<div class="stacked-seg" style="width:100%;background:var(--surface2);color:var(--muted)">0</div>';return'<div class="bar-row" onclick="toggleDetail(\''+d.name+'\')"><div class="bar-name">'+esc(d.name)+'</div><div class="bar-track" style="background:transparent"><div class="stacked-bar" style="width:100%">'+segs+'</div></div></div>'}).join('');
+  var stacked=dd.map(d=>{var segs='';ST_ORDER.filter(s=>s!=='NO REQUIERE').forEach(s=>{var c=d.ps.filter(p=>p.st===s).length;if(c){var pct=Math.round(c/Math.max(d.total,1)*100);segs+='<div class="stacked-seg" style="width:'+Math.max(pct,4)+'%;background:'+ST_C[s]+'">'+c+'</div>'}});if(!segs)segs='<div class="stacked-seg" style="width:100%;background:var(--surface2);color:var(--muted)">0</div>';return'<div class="bar-row" onclick="toggleDetail(\''+d.name+'\')"><div class="bar-name">'+esc(d.name)+'</div><div class="bar-track" style="background:transparent"><div class="stacked-bar" style="width:100%">'+segs+'</div></div></div>'}).join('');
   var leg=ST_ORDER.filter(s=>s!=='NO REQUIERE').map(s=>'<div class="legend-item"><div class="legend-dot" style="background:'+ST_C[s]+'"></div>'+esc(s)+'</div>').join('');
 
   // Balance
@@ -295,7 +295,7 @@ function renderAll(){
 
   var alertsHTML='';
   if(alerts.length>0){
-    alertsHTML='<div class="card" style="margin-top:24px;border-color:rgba(239,68,68,0.2)"><div class="card-title"><span>🚨</span> Alertas de Tiempo ('+alerts.length+') <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">Proyectos que exceden el tiempo máximo en su estado</span></div>';
+    alertsHTML='<div class="card" style="margin-bottom:24px;border-color:rgba(239,68,68,0.2)"><div class="card-title"><span>🚨</span> Alertas de Tiempo ('+alerts.length+') <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">Proyectos que exceden el tiempo máximo en su estado</span></div>';
     alertsHTML+='<div style="display:flex;flex-direction:column;gap:6px">';
     alerts.forEach(function(a){
       var urgency=a.days>a.rule.days*2?'🔴':'🟡';
@@ -312,7 +312,7 @@ function renderAll(){
     });
     alertsHTML+='</div></div>';
   }else{
-    alertsHTML='<div class="card" style="margin-top:24px"><div class="card-title"><span>✅</span> Sin Alertas</div><div style="font-size:12px;color:var(--text2);padding:8px 0">Todos los proyectos están dentro de los tiempos esperados.</div></div>';
+    alertsHTML='<div class="card" style="margin-bottom:24px"><div class="card-title"><span>✅</span> Sin Alertas</div><div style="font-size:12px;color:var(--text2);padding:8px 0">Todos los proyectos están dentro de los tiempos esperados.</div></div>';
   }
   document.getElementById('alertsContainer').innerHTML=alertsHTML;
 
