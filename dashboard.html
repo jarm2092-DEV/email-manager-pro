@@ -136,12 +136,13 @@
   <div class="grid-2" id="row1"></div>
   <div class="grid-2" id="row2"></div>
   <div class="card anim" style="animation-delay:500ms" id="tableCard"></div>
+  <div id="alertsContainer"></div>
   <div id="recsContainer"></div>
 </div>
 
 <script>
 var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
-var DIBS=['YASMANY','GUSTAVO','MAIKRO','YARIEL','YOSVANY'];
+var DIBS=['YASMANY','GUSTAVO','MAIKRO','YARIEL','YOLEXIS','JANNIK','YOSVANY'];
 var ST_ORDER=['Por comenzar','En dibujo','Corrección','En espera de Ing Prof','En espera de Ing Express','Pendiente de informacion (Client)','Terminado','NO REQUIERE'];
 var ST_C={'Por comenzar':'var(--amber)','En dibujo':'var(--blue)','Corrección':'var(--red)','En espera de Ing Prof':'var(--purple)','En espera de Ing Express':'var(--pink)','Pendiente de informacion (Client)':'var(--orange)','Terminado':'var(--green)','NO REQUIERE':'var(--muted)'};
 var ST_BG={'Por comenzar':'var(--amber-s)','En dibujo':'var(--blue-s)','Corrección':'var(--red-s)','En espera de Ing Prof':'var(--purple-s)','En espera de Ing Express':'var(--pink-s)','Pendiente de informacion (Client)':'var(--orange-s)','Terminado':'var(--green-s)','NO REQUIERE':'rgba(85,85,106,0.15)'};
@@ -173,7 +174,7 @@ async function loadData(){
     allProjects=data.map(it=>{
       var dw=it.DWSTATUS||it.DWStatus||it.dwstatus||'';if(dw&&typeof dw==='object')dw=dw.Value||'';if(typeof dw!=='string')dw='';
       var db=it.DIBUJANTE||it.Dibujante||it.dibujante||'';if(db&&typeof db==='object')db=db.Value||'';if(typeof db!=='string')db='';
-      return{title:(it.Title||'').toString(),st:dw,dib:db};
+      return{title:(it.Title||'').toString(),st:dw,dib:db,modified:it.Modified||it.modified||''};
     }).filter(p=>p.title.length>0);
     document.getElementById('timestamp').textContent=new Date().toLocaleString('es-ES');
     renderAll();
@@ -186,8 +187,13 @@ function renderAll(){
   var active=ps.filter(p=>['En dibujo','Corrección'].includes(p.st)).length;
   var pending=ps.filter(p=>p.st==='Por comenzar').length;
   var done=ps.filter(p=>p.st==='Terminado').length;
+  // Pre-count alerts for KPI
+  var alertRulesQuick=[{s:'Pendiente de informacion (Client)',d:3},{s:'Corrección',d:2},{s:'En espera de Ing Prof',d:5},{s:'En espera de Ing Express',d:5}];
+  var nowQ=new Date();var alertCount=0;
+  ps.forEach(function(p){if(!p.modified)return;var rule=alertRulesQuick.find(function(r){return r.s===p.st});if(!rule)return;var md=new Date(p.modified);if(isNaN(md))return;if(Math.floor((nowQ-md)/(864e5))>=rule.d)alertCount++});
 
-  document.getElementById('kpis').innerHTML=kpi(total,'Total Proyectos','var(--accent-g)')+kpi(active,'En Progreso','linear-gradient(135deg,var(--blue),var(--cyan))')+kpi(pending,'Por Comenzar','linear-gradient(135deg,var(--amber),var(--orange))')+kpi(done,'Terminados','linear-gradient(135deg,var(--green),#34d399)');
+  document.getElementById('kpis').innerHTML=kpi(total,'Total Proyectos','var(--accent-g)')+kpi(active,'En Progreso','linear-gradient(135deg,var(--blue),var(--cyan))')+kpi(pending,'Por Comenzar','linear-gradient(135deg,var(--amber),var(--orange))')+kpi(done,'Terminados','linear-gradient(135deg,var(--green),#34d399)')+kpi(alertCount,'Alertas',alertCount>0?'linear-gradient(135deg,var(--red),var(--orange))':'linear-gradient(135deg,#555,#777)');
+  document.getElementById('kpis').style.gridTemplateColumns='repeat(5,1fr)';
 
   var dd=DIBS.map((n,ci)=>{var pp=ps.filter(p=>p.dib===n);var act=pp.filter(p=>p.st&&p.st!=='Terminado'&&p.st!=='NO REQUIERE');return{name:n,total:pp.length,activos:act.length,terminados:pp.filter(p=>p.st==='Terminado').length,noRequiere:pp.filter(p=>p.st==='NO REQUIERE'||!p.st).length,color:DC[ci],ps:pp}}).sort((a,b)=>b.activos-a.activos);
   var mx=Math.max(...dd.map(d=>d.activos),1);
@@ -264,6 +270,52 @@ function renderAll(){
   recsHTML+='</div></div>';
   document.getElementById('recsContainer').innerHTML=recsHTML;
 
+  // ── Alerts ──
+  var ALERT_RULES=[
+    {status:'Pendiente de informacion (Client)',days:3,icon:'📞',label:'Pend. Info Cliente',color:'var(--orange)',bg:'var(--orange-s)'},
+    {status:'Corrección',days:2,icon:'🔧',label:'Corrección',color:'var(--red)',bg:'var(--red-s)'},
+    {status:'En espera de Ing Prof',days:5,icon:'⏳',label:'Espera Ing. Prof',color:'var(--purple)',bg:'var(--purple-s)'},
+    {status:'En espera de Ing Express',days:5,icon:'⏳',label:'Espera Ing. Express',color:'var(--pink)',bg:'var(--pink-s)'}
+  ];
+  var now=new Date();
+  var alerts=[];
+  ps.forEach(function(p){
+    if(!p.modified)return;
+    var rule=ALERT_RULES.find(function(r){return r.status===p.st});
+    if(!rule)return;
+    var modDate=new Date(p.modified);
+    if(isNaN(modDate.getTime()))return;
+    var diffDays=Math.floor((now-modDate)/(1000*60*60*24));
+    if(diffDays>=rule.days){
+      var sp=splitP(p.title);
+      alerts.push({id:sp.id,addr:sp.addr,status:p.st,dib:p.dib,days:diffDays,rule:rule});
+    }
+  });
+  alerts.sort(function(a,b){return b.days-a.days});
+
+  var alertsHTML='';
+  if(alerts.length>0){
+    alertsHTML='<div class="card" style="margin-top:24px;border-color:rgba(239,68,68,0.2)"><div class="card-title"><span>🚨</span> Alertas de Tiempo ('+alerts.length+') <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">Proyectos que exceden el tiempo máximo en su estado</span></div>';
+    alertsHTML+='<div style="display:flex;flex-direction:column;gap:6px">';
+    alerts.forEach(function(a){
+      var urgency=a.days>a.rule.days*2?'🔴':'🟡';
+      alertsHTML+='<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:'+a.rule.bg+';border:1px solid '+a.rule.color+'20;border-radius:var(--radius-sm);transition:all 0.15s">';
+      alertsHTML+='<div style="font-size:18px;flex-shrink:0">'+a.rule.icon+'</div>';
+      alertsHTML+='<div style="flex:1;min-width:0">';
+      alertsHTML+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong style="color:var(--text);font-size:13px">'+esc(a.id)+'</strong>';
+      alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:'+a.rule.bg+';color:'+a.rule.color+';border:1px solid '+a.rule.color+'30">'+esc(a.rule.label)+'</span>';
+      alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:var(--surface2);color:var(--text2)">✏️ '+esc(a.dib||'Sin asignar')+'</span></div>';
+      alertsHTML+='<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(a.addr)+'</div>';
+      alertsHTML+='</div>';
+      alertsHTML+='<div style="text-align:right;flex-shrink:0"><div style="font-family:JetBrains Mono;font-size:20px;font-weight:700;color:'+a.rule.color+'">'+a.days+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">días</div></div>';
+      alertsHTML+='</div>';
+    });
+    alertsHTML+='</div></div>';
+  }else{
+    alertsHTML='<div class="card" style="margin-top:24px"><div class="card-title"><span>✅</span> Sin Alertas</div><div style="font-size:12px;color:var(--text2);padding:8px 0">Todos los proyectos están dentro de los tiempos esperados.</div></div>';
+  }
+  document.getElementById('alertsContainer').innerHTML=alertsHTML;
+
   // Re-render detail if open
   if(selectedDib)showDetail(selectedDib);
 }
@@ -283,7 +335,8 @@ function showDetail(name){
   var chips='';
   ST_ORDER.forEach(s=>{var c=ps.filter(p=>p.st===s).length;if(c)chips+='<div class="modal-chip" style="background:'+(ST_BG[s]||'var(--surface2)')+';color:'+(ST_C[s]||'var(--muted)')+'"><span class="chip-n">'+c+'</span> '+esc(s)+'</div>'});
 
-  var items=ps.sort((a,b)=>{var ai=ST_ORDER.indexOf(a.st),bi=ST_ORDER.indexOf(b.st);return(ai<0?99:ai)-(bi<0?99:bi)}).map(p=>{var sp=splitP(p.title);var sc=ST_C[p.st]||'var(--muted)';var sb=ST_BG[p.st]||'var(--surface2)';return'<div class="dp-item"><div class="dp-id" style="color:'+color+'">'+esc(sp.id)+'</div><div class="dp-addr">'+esc(sp.addr)+'</div><div class="dp-status" style="background:'+sb+';color:'+sc+'">'+esc(p.st||'Sin estado')+'</div></div>'}).join('');
+  var nowM=new Date();
+  var items=ps.sort((a,b)=>{var ai=ST_ORDER.indexOf(a.st),bi=ST_ORDER.indexOf(b.st);return(ai<0?99:ai)-(bi<0?99:bi)}).map(p=>{var sp=splitP(p.title);var sc=ST_C[p.st]||'var(--muted)';var sb=ST_BG[p.st]||'var(--surface2)';var daysStr='';if(p.modified){var md=new Date(p.modified);if(!isNaN(md)){var dd=Math.floor((nowM-md)/864e5);if(dd>0)daysStr='<span style="font-family:JetBrains Mono;font-size:10px;color:var(--muted);margin-left:4px">'+ dd+'d</span>'}};return'<div class="dp-item"><div class="dp-id" style="color:'+color+'">'+esc(sp.id)+'</div><div class="dp-addr">'+esc(sp.addr)+'</div><div class="dp-status" style="background:'+sb+';color:'+sc+'">'+esc(p.st||'Sin estado')+daysStr+'</div></div>'}).join('');
 
   var allActivos=filtered().filter(p=>p.st&&p.st!=='Terminado'&&p.st!=='NO REQUIERE').length;
   var pct=allActivos>0?Math.round(activos/allActivos*100):0;
