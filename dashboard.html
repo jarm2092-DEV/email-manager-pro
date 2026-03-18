@@ -136,6 +136,7 @@
   <div class="grid-2" id="row1"></div>
   <div class="grid-2" id="row2"></div>
   <div class="card anim" style="animation-delay:500ms" id="tableCard"></div>
+  <div id="recsContainer"></div>
 </div>
 
 <script>
@@ -188,7 +189,7 @@ function renderAll(){
 
   document.getElementById('kpis').innerHTML=kpi(total,'Total Proyectos','var(--accent-g)')+kpi(active,'En Progreso','linear-gradient(135deg,var(--blue),var(--cyan))')+kpi(pending,'Por Comenzar','linear-gradient(135deg,var(--amber),var(--orange))')+kpi(done,'Terminados','linear-gradient(135deg,var(--green),#34d399)');
 
-  var dd=DIBS.map((n,ci)=>{var pp=ps.filter(p=>p.dib===n);return{name:n,total:pp.length,activos:pp.filter(p=>!['Terminado','NO REQUIERE'].includes(p.st)).length,terminados:pp.filter(p=>p.st==='Terminado').length,color:DC[ci],ps:pp}}).sort((a,b)=>b.activos-a.activos);
+  var dd=DIBS.map((n,ci)=>{var pp=ps.filter(p=>p.dib===n);var act=pp.filter(p=>p.st&&p.st!=='Terminado'&&p.st!=='NO REQUIERE');return{name:n,total:pp.length,activos:act.length,terminados:pp.filter(p=>p.st==='Terminado').length,noRequiere:pp.filter(p=>p.st==='NO REQUIERE'||!p.st).length,color:DC[ci],ps:pp}}).sort((a,b)=>b.activos-a.activos);
   var mx=Math.max(...dd.map(d=>d.activos),1);
 
   // Bars
@@ -214,8 +215,54 @@ function renderAll(){
 
   // Table
   var totalActivos=dd.reduce((a,d)=>a+d.activos,0);
-  var rows=dd.map(d=>{var enD=d.ps.filter(p=>p.st==='En dibujo').length,cor=d.ps.filter(p=>p.st==='Corrección').length,pc=d.ps.filter(p=>p.st==='Por comenzar').length,esp=d.ps.filter(p=>p.st&&p.st.includes('espera')).length,pi=d.ps.filter(p=>p.st&&p.st.includes('Pendiente')).length,lp=totalActivos>0?Math.round(d.activos/totalActivos*100):0,lc=lp>30?'var(--red)':lp>20?'var(--amber)':'var(--green)';return'<tr onclick="toggleDetail(\''+d.name+'\')"><td class="td-name" style="color:'+d.color+'">'+esc(d.name)+'</td><td><span style="font-family:JetBrains Mono;font-weight:600">'+d.total+'</span></td><td><span class="td-badge" style="background:var(--blue-s);color:var(--blue)">'+enD+'</span></td><td><span class="td-badge" style="background:var(--red-s);color:var(--red)">'+cor+'</span></td><td><span class="td-badge" style="background:var(--amber-s);color:var(--amber)">'+pc+'</span></td><td><span class="td-badge" style="background:var(--purple-s);color:var(--purple)">'+esp+'</span></td><td><span class="td-badge" style="background:var(--orange-s);color:var(--orange)">'+pi+'</span></td><td><span class="td-badge" style="background:var(--green-s);color:var(--green)">'+d.terminados+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:'+lc+'">'+lp+'%</span></td></tr>'}).join('');
-  document.getElementById('tableCard').innerHTML='<div class="card-title"><span>📋</span> Detalle por Dibujante <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">clic en fila para ver proyectos</span></div><div style="overflow-x:auto"><table class="detail-table"><thead><tr><th>Dibujante</th><th>Total</th><th>En Dibujo</th><th>Corrección</th><th>Por Comenzar</th><th>Espera</th><th>Pend. Info</th><th>Terminados</th><th>Carga</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  var rows=dd.map(d=>{var enD=d.ps.filter(p=>p.st==='En dibujo').length,cor=d.ps.filter(p=>p.st==='Corrección').length,pc=d.ps.filter(p=>p.st==='Por comenzar').length,esp=d.ps.filter(p=>p.st&&p.st.includes('espera')).length,pi=d.ps.filter(p=>p.st&&p.st.includes('Pendiente')).length,lp=totalActivos>0?Math.round(d.activos/totalActivos*100):0,lc=lp>30?'var(--red)':lp>20?'var(--amber)':'var(--green)';return'<tr onclick="toggleDetail(\''+d.name+'\')"><td class="td-name" style="color:'+d.color+'">'+esc(d.name)+'</td><td><span style="font-family:JetBrains Mono;font-weight:600">'+d.total+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:var(--accent2)">'+d.activos+'</span></td><td><span class="td-badge" style="background:var(--blue-s);color:var(--blue)">'+enD+'</span></td><td><span class="td-badge" style="background:var(--red-s);color:var(--red)">'+cor+'</span></td><td><span class="td-badge" style="background:var(--amber-s);color:var(--amber)">'+pc+'</span></td><td><span class="td-badge" style="background:var(--purple-s);color:var(--purple)">'+esp+'</span></td><td><span class="td-badge" style="background:var(--orange-s);color:var(--orange)">'+pi+'</span></td><td><span class="td-badge" style="background:var(--green-s);color:var(--green)">'+d.terminados+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:'+lc+'">'+lp+'%</span></td></tr>'}).join('');
+  // Totals row
+  var tTotal=dd.reduce((a,d)=>a+d.total,0);
+  var tActivos=totalActivos;
+  var tEnD=dd.reduce((a,d)=>a+d.ps.filter(p=>p.st==='En dibujo').length,0);
+  var tCor=dd.reduce((a,d)=>a+d.ps.filter(p=>p.st==='Corrección').length,0);
+  var tPc=dd.reduce((a,d)=>a+d.ps.filter(p=>p.st==='Por comenzar').length,0);
+  var tEsp=dd.reduce((a,d)=>a+d.ps.filter(p=>p.st&&p.st.includes('espera')).length,0);
+  var tPi=dd.reduce((a,d)=>a+d.ps.filter(p=>p.st&&p.st.includes('Pendiente')).length,0);
+  var tTerm=dd.reduce((a,d)=>a+d.terminados,0);
+  var totalsRow='<tr style="background:var(--surface2);font-weight:700"><td style="color:var(--text);font-weight:800">TOTAL</td><td><span style="font-family:JetBrains Mono;font-weight:700">'+tTotal+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:var(--accent2)">'+tActivos+'</span></td><td><span class="td-badge" style="background:var(--blue-s);color:var(--blue)">'+tEnD+'</span></td><td><span class="td-badge" style="background:var(--red-s);color:var(--red)">'+tCor+'</span></td><td><span class="td-badge" style="background:var(--amber-s);color:var(--amber)">'+tPc+'</span></td><td><span class="td-badge" style="background:var(--purple-s);color:var(--purple)">'+tEsp+'</span></td><td><span class="td-badge" style="background:var(--orange-s);color:var(--orange)">'+tPi+'</span></td><td><span class="td-badge" style="background:var(--green-s);color:var(--green)">'+tTerm+'</span></td><td><span style="font-family:JetBrains Mono;font-weight:700;color:var(--text)">100%</span></td></tr>';
+  document.getElementById('tableCard').innerHTML='<div class="card-title"><span>📋</span> Detalle por Dibujante <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">Total activos: <strong style="color:var(--accent2)">'+totalActivos+'</strong> — clic en fila para ver proyectos</span></div><div style="overflow-x:auto"><table class="detail-table"><thead><tr><th>Dibujante</th><th>Total</th><th>Activos</th><th>En Dibujo</th><th>Corrección</th><th>Por Comenzar</th><th>Espera</th><th>Pend. Info</th><th>Terminados</th><th>Carga</th></tr></thead><tbody>'+rows+totalsRow+'</tbody></table></div>';
+
+  // Balance recommendations
+  var idealPerDib=DIBS.length>0?Math.round(totalActivos/DIBS.length):0;
+  var recsHTML='<div class="card" style="margin-top:24px"><div class="card-title"><span>💡</span> Recomendaciones de Balance</div>';
+  recsHTML+='<div style="font-size:12px;color:var(--text2);margin-bottom:16px">Carga ideal por dibujante: <strong style="color:var(--text);font-family:JetBrains Mono">'+idealPerDib+' proyectos activos</strong> ('+totalActivos+' total ÷ '+DIBS.length+' dibujantes)</div>';
+  recsHTML+='<div style="display:flex;flex-direction:column;gap:8px">';
+  dd.forEach(d=>{
+    var diff=d.activos-idealPerDib;
+    if(diff>3){
+      var porComenzar=d.ps.filter(p=>p.st==='Por comenzar').length;
+      var enEspera=d.ps.filter(p=>p.st&&p.st.includes('espera')).length;
+      var correccion=d.ps.filter(p=>p.st==='Corrección').length;
+      var redistribuir=Math.min(diff,porComenzar);
+      recsHTML+='<div style="padding:12px 16px;background:var(--red-s);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius-sm);font-size:12px;line-height:1.8">';
+      recsHTML+='🔴 <strong style="color:var(--red)">'+esc(d.name)+'</strong> tiene <strong>'+diff+' proyectos de más</strong> sobre el ideal ('+d.activos+' vs '+idealPerDib+').';
+      if(porComenzar>0)recsHTML+='<br>→ <strong>'+porComenzar+' por comenzar</strong>: pueden reasignarse a dibujantes con menor carga.';
+      if(enEspera>0)recsHTML+='<br>→ <strong>'+enEspera+' en espera de ingeniería</strong>: no requieren atención activa del dibujante.';
+      if(correccion>0)recsHTML+='<br>→ <strong>'+correccion+' en corrección</strong>: priorizar para liberar capacidad.';
+      if(redistribuir>0){
+        var receptores=dd.filter(x=>x.activos<idealPerDib-2).map(x=>x.name);
+        if(receptores.length)recsHTML+='<br><span style="color:var(--amber)">💡 Sugerencia: mover ~'+redistribuir+' proyectos "Por comenzar" a '+receptores.join(', ')+'.</span>';
+      }
+      recsHTML+='</div>';
+    }else if(diff<-3){
+      var puedeRecibir=Math.abs(diff);
+      recsHTML+='<div style="padding:12px 16px;background:var(--green-s);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius-sm);font-size:12px;line-height:1.8">';
+      recsHTML+='🟢 <strong style="color:var(--green)">'+esc(d.name)+'</strong> tiene capacidad disponible. Puede recibir <strong>~'+puedeRecibir+' proyectos</strong> (tiene '+d.activos+', ideal '+idealPerDib+').';
+      recsHTML+='</div>';
+    }else{
+      recsHTML+='<div style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;line-height:1.8;color:var(--text2)">';
+      recsHTML+='⚪ <strong style="color:var(--text)">'+esc(d.name)+'</strong> — carga equilibrada ('+d.activos+' activos, ideal '+idealPerDib+').';
+      recsHTML+='</div>';
+    }
+  });
+  recsHTML+='</div></div>';
+  document.getElementById('recsContainer').innerHTML=recsHTML;
 
   // Re-render detail if open
   if(selectedDib)showDetail(selectedDib);
@@ -230,7 +277,7 @@ function showDetail(name){
   var ps=filtered().filter(p=>p.dib===name);
   var total=filtered().length;
   var ci=DIBS.indexOf(name);var color=DC[ci>=0?ci:0];
-  var activos=ps.filter(p=>!['Terminado','NO REQUIERE'].includes(p.st)).length;
+  var activos=ps.filter(p=>p.st&&p.st!=='Terminado'&&p.st!=='NO REQUIERE').length;
 
   // Summary chips per status
   var chips='';
@@ -238,7 +285,7 @@ function showDetail(name){
 
   var items=ps.sort((a,b)=>{var ai=ST_ORDER.indexOf(a.st),bi=ST_ORDER.indexOf(b.st);return(ai<0?99:ai)-(bi<0?99:bi)}).map(p=>{var sp=splitP(p.title);var sc=ST_C[p.st]||'var(--muted)';var sb=ST_BG[p.st]||'var(--surface2)';return'<div class="dp-item"><div class="dp-id" style="color:'+color+'">'+esc(sp.id)+'</div><div class="dp-addr">'+esc(sp.addr)+'</div><div class="dp-status" style="background:'+sb+';color:'+sc+'">'+esc(p.st||'Sin estado')+'</div></div>'}).join('');
 
-  var allActivos=filtered().filter(p=>!['Terminado','NO REQUIERE'].includes(p.st)).length;
+  var allActivos=filtered().filter(p=>p.st&&p.st!=='Terminado'&&p.st!=='NO REQUIERE').length;
   var pct=allActivos>0?Math.round(activos/allActivos*100):0;
 
   document.getElementById('modalContent').innerHTML=
