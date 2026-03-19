@@ -273,22 +273,22 @@ function render(){
 
   // Render 4 alert cards
   var acHTML='<div class="alert-cards">';
-  acHTML+='<div class="alert-card '+(expiredAlerts.length?'has-alerts':'zero')+'" onclick="'+(expiredAlerts.length?'openAM(\"expired\")':'')+'">';
+  acHTML+='<div class="alert-card '+(expiredAlerts.length?'has-alerts':'zero')+'" '+(expiredAlerts.length?'onclick="openAM(\x27expired\x27)"':'')+'>';
   acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--rd),var(--or))"></div>';
   acHTML+='<div class="ac-top"><div class="ac-icon">🚨</div><div class="ac-count" style="color:var(--rd)">'+expiredAlerts.length+'</div></div>';
   acHTML+='<div class="ac-label">Permisos Expirados</div></div>';
 
-  acHTML+='<div class="alert-card '+(expireAlerts.length?'has-alerts':'zero')+'" onclick="'+(expireAlerts.length?'openAM(\"expire\")':'')+'">';
+  acHTML+='<div class="alert-card '+(expireAlerts.length?'has-alerts':'zero')+'" '+(expireAlerts.length?'onclick="openAM(\x27expire\x27)"':'')+'>';
   acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--or),var(--am))"></div>';
   acHTML+='<div class="ac-top"><div class="ac-icon">⏰</div><div class="ac-count" style="color:var(--or)">'+expireAlerts.length+'</div></div>';
   acHTML+='<div class="ac-label">Próximos a Expirar</div></div>';
 
-  acHTML+='<div class="alert-card '+(staleAlerts.length?'has-alerts':'zero')+'" onclick="'+(staleAlerts.length?'openAM(\"stale\")':'')+'">';
+  acHTML+='<div class="alert-card '+(staleAlerts.length?'has-alerts':'zero')+'" '+(staleAlerts.length?'onclick="openAM(\x27stale\x27)"':'')+'>';
   acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--am),var(--pp))"></div>';
   acHTML+='<div class="ac-top"><div class="ac-icon">⚠️</div><div class="ac-count" style="color:var(--am)">'+staleAlerts.length+'</div></div>';
   acHTML+='<div class="ac-label">Aprobados sin Avance</div></div>';
 
-  acHTML+='<div class="alert-card '+(inactiveAlerts.length?'has-alerts':'zero')+'" onclick="'+(inactiveAlerts.length?'openAM(\"inactive\")':'')+'">';
+  acHTML+='<div class="alert-card '+(inactiveAlerts.length?'has-alerts':'zero')+'" '+(inactiveAlerts.length?'onclick="openAM(\x27inactive\x27)"':'')+'>';
   acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--bl),var(--cy))"></div>';
   acHTML+='<div class="ac-top"><div class="ac-icon">💤</div><div class="ac-count" style="color:var(--bl)">'+inactiveAlerts.length+'</div></div>';
   acHTML+='<div class="ac-label">Inactivos +15 días</div></div>';
