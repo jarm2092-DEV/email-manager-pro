@@ -59,6 +59,24 @@
     
     .dib-current{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3)}
     
+    .days-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:3px 8px;border-radius:12px;white-space:nowrap}
+    .days-ok{background:rgba(34,197,94,0.12);color:#22c55e}
+    .days-warn{background:rgba(234,179,8,0.12);color:#eab308}
+    .days-danger{background:rgba(239,68,68,0.12);color:#ef4444}
+    
+    .notes-section{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+    .notes-toggle{font-size:11px;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;gap:4px;transition:color 0.15s;background:none;border:none;font-family:inherit;padding:4px 0}
+    .notes-toggle:hover{color:var(--text)}
+    .notes-body{display:none;margin-top:8px}
+    .notes-body.open{display:block}
+    .notes-existing{font-size:11px;color:var(--text-muted);line-height:1.6;margin-bottom:8px;max-height:100px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;background:rgba(255,255,255,0.02);border-radius:6px;padding:8px}
+    .notes-input{width:100%;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:11px;resize:vertical;min-height:36px;max-height:100px;transition:border-color 0.2s}
+    .notes-input:focus{outline:none;border-color:#6366f1}
+    .notes-input::placeholder{color:rgba(255,255,255,0.2)}
+    .notes-save{margin-top:6px;padding:5px 14px;border:none;background:#6366f1;color:white;border-radius:6px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;transition:opacity 0.2s}
+    .notes-save:hover{opacity:0.85}
+    .notes-save:disabled{opacity:0.4;cursor:wait}
+    
     .status-selector{display:flex;flex-wrap:wrap;gap:6px}
     .status-opt{padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-family:inherit;font-size:11.5px;font-weight:500;cursor:pointer;transition:all 0.2s;white-space:nowrap}
     .status-opt:hover{border-color:var(--muted);transform:translateY(-1px)}
@@ -138,18 +156,21 @@ var filterDib=localStorage.getItem('dw_filterDib')||'';
 var filterStatus=localStorage.getItem('dw_filterStatus')||'';
 
 function buildOptions(){
-  // Extract unique statuses from data, known order first
+  // Hardcoded known options (always shown even if no project has them)
   var knownSt=['NO REQUIERE','Por comenzar','En dibujo','Corrección','En espera de Ing Prof','En espera de Ing Express','Pendiente de informacion (Client)','Terminado'];
-  var stSet={};projects.forEach(function(p){if(p.dwstatus)stSet[p.dwstatus]=true});
-  STATUS_OPTIONS=[];
-  knownSt.forEach(function(s){if(stSet[s]){STATUS_OPTIONS.push(s);delete stSet[s]}});
-  Object.keys(stSet).sort().forEach(function(s){STATUS_OPTIONS.push(s)});
-  // Extract unique dibujantes
-  var knownDib=['NO REQUIERE'];
-  var dibSet={};projects.forEach(function(p){if(p.dibujante)dibSet[p.dibujante]=true});
-  DIBUJANTE_OPTIONS=[];
-  knownDib.forEach(function(d){if(dibSet[d]){DIBUJANTE_OPTIONS.push(d);delete dibSet[d]}});
-  Object.keys(dibSet).sort().forEach(function(d){DIBUJANTE_OPTIONS.push(d)});
+  var knownDib=['NO REQUIERE','YASMANY','GUSTAVO','MAIKRO','YARIEL','YOLEXIS','JANNIK','YOSVANY'];
+  
+  // Start with all known options
+  STATUS_OPTIONS=knownSt.slice();
+  // Add any dynamic options from data that aren't already known
+  projects.forEach(function(p){
+    if(p.dwstatus&&STATUS_OPTIONS.indexOf(p.dwstatus)===-1)STATUS_OPTIONS.push(p.dwstatus);
+  });
+  
+  DIBUJANTE_OPTIONS=knownDib.slice();
+  projects.forEach(function(p){
+    if(p.dibujante&&DIBUJANTE_OPTIONS.indexOf(p.dibujante)===-1)DIBUJANTE_OPTIONS.push(p.dibujante);
+  });
 }
 
 function setFilterDib(v){filterDib=v;localStorage.setItem('dw_filterDib',v);renderFilters();renderProjects()}
@@ -214,7 +235,7 @@ async function loadProjects(){
       var db=item.DIBUJANTE||item.Dibujante||item.dibujante||'';
       if(db&&typeof db==='object'){db=db.Value||db.value||(db.results?db.results[0]:'')||''}
       if(typeof db!=='string')db=db?String(db):'';
-      return{title:(item.Title||'').toString(),dwstatus:dw,dibujante:db};
+      return{title:(item.Title||'').toString(),dwstatus:dw,dibujante:db,cambioDw:item.CambioDw||item.cambioDw||item.cambiodw||'',notes:item.Notes||item.notes||'',modified:item.Modified||''};
     }).filter(function(p){return p.title.length>0});
     projects.sort(function(a,b){return a.title.localeCompare(b.title)});
     buildOptions();
@@ -229,11 +250,12 @@ async function loadProjects(){
 
 function renderProjects(){
   var filtered=getFiltered();
+  var now=new Date();
   
   document.getElementById('counter').textContent=filtered.length+' de '+projects.length+' proyectos';
   
   if(!filtered.length){
-    document.getElementById('projectList').innerHTML=q?'<div class="empty">Sin resultados para "'+esc(q)+'"</div>':'<div class="empty">No hay proyectos.</div>';
+    document.getElementById('projectList').innerHTML='<div class="empty">No hay proyectos con estos filtros.</div>';
     return;
   }
   
@@ -242,6 +264,23 @@ function renderProjects(){
     var stClass=statusClass(p.dwstatus);
     var stLabel=p.dwstatus||'Sin estado';
     var dbLabel=p.dibujante||'Sin asignar';
+    
+    // Days since cambioDw
+    var daysHTML='';
+    if(p.cambioDw&&p.dwstatus&&p.dwstatus!=='NO REQUIERE'&&p.dwstatus!=='Terminado'){
+      var cd=new Date(p.cambioDw);
+      if(!isNaN(cd)){
+        var days=Math.floor((now-cd)/864e5);
+        var dc=days>5?'days-danger':days>2?'days-warn':'days-ok';
+        daysHTML='<span class="days-badge '+dc+'">'+days+'d</span>';
+      }
+    }
+    
+    // Notes preview
+    var noteText=p.notes||'';
+    var hasNotes=noteText.length>0;
+    var notePreview=noteText.length>150?noteText.substring(0,150)+'...':noteText;
+    
     return '<div class="project-card fade-in" style="animation-delay:'+Math.min(i*30,300)+'ms">'+
       '<div class="project-top">'+
         '<div><div class="project-id">'+esc(sp.id)+'</div>'+
@@ -250,6 +289,7 @@ function renderProjects(){
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'+
           '<span class="status-current '+stClass+'">'+esc(stLabel)+'</span>'+
           '<span class="dib-current">✏️ '+esc(dbLabel)+'</span>'+
+          daysHTML+
         '</div>'+
       '</div>'+
       '<div class="field-label">Estado del dibujo</div>'+
@@ -268,6 +308,14 @@ function renderProjects(){
           var safeOpt=opt.replace(/'/g,"\\'");
           return '<button class="dib-opt '+isActive+'" onclick="updateDibujante('+i+',\''+safeOpt+'\')">'+esc(opt)+'</button>';
         }).join('')+
+      '</div>'+
+      '<div class="notes-section">'+
+        '<button class="notes-toggle" onclick="toggleNotes('+i+')">📝 Notas '+(hasNotes?'<span style="color:#6366f1">('+noteText.split('\\n').length+')</span>':'')+'</button>'+
+        '<div class="notes-body" id="notes-'+i+'">'+
+          (hasNotes?'<div class="notes-existing">'+esc(notePreview)+'</div>':'')+
+          '<textarea class="notes-input" id="noteInput-'+i+'" placeholder="Agregar nota..."></textarea>'+
+          '<button class="notes-save" onclick="saveNote('+i+')">💾 Guardar nota</button>'+
+        '</div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -312,6 +360,42 @@ function getFiltered(){
 }
 function disableButtons(id){var el=document.getElementById(id);if(el)el.querySelectorAll('button').forEach(function(b){b.disabled=true})}
 function enableButtons(id){var el=document.getElementById(id);if(el)el.querySelectorAll('button').forEach(function(b){b.disabled=false})}
+
+function toggleNotes(idx){
+  var el=document.getElementById('notes-'+idx);
+  if(el)el.classList.toggle('open');
+}
+
+async function saveNote(idx){
+  var filtered=getFiltered();
+  var p=filtered[idx];if(!p)return;
+  var input=document.getElementById('noteInput-'+idx);
+  var text=(input?input.value:'').trim();
+  if(!text){showToast('Escribe una nota',true);return}
+  
+  // Format: [date] note text
+  var dateStr=new Date().toLocaleDateString('es-ES')+' '+new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  var newNote='['+dateStr+'] '+text;
+  var fullNotes=p.notes?(p.notes+'\n'+newNote):newNote;
+  
+  var btn=input.parentElement.querySelector('.notes-save');
+  if(btn)btn.disabled=true;
+  showToast('Guardando nota...');
+  
+  try{
+    var r=await fetch(FLOW_UPDATE,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({projectTitle:p.title,dwstatus:p.dwstatus||'',dibujante:p.dibujante||'',notes:fullNotes})});
+    if(r.ok){
+      p.notes=fullNotes;
+      if(input)input.value='';
+      renderProjects();
+      showToast('Nota guardada ✓');
+    }else{
+      showToast('Error guardando nota',true);
+      if(btn)btn.disabled=false;
+    }
+  }catch(e){showToast('Error: '+e.message,true);if(btn)btn.disabled=false}
+}
 
 // Load on start
 loadProjects();
