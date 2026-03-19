@@ -113,6 +113,19 @@
     .md-val{font-size:12px;color:var(--tx)}
 
     .loading{text-align:center;padding:60px;color:var(--mt)}
+    .alert-box{background:var(--sf);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r);padding:18px 22px;margin-bottom:20px}
+    .alert-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:12px}
+    .alert-title span{font-size:15px}
+    .alert-list{display:flex;flex-direction:column;gap:6px}
+    .alert-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--rs);border:1px solid var(--bd);transition:all 0.15s}
+    .alert-item:hover{background:var(--sf2);border-color:var(--bd2)}
+    .alert-icon{font-size:18px;flex-shrink:0}
+    .alert-info{flex:1;min-width:0}
+    .alert-id{font-weight:700;font-size:12px;color:var(--tx)}
+    .alert-desc{font-size:10px;color:var(--tx2);margin-top:2px}
+    .alert-right{text-align:right;flex-shrink:0}
+    .alert-days{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700}
+    .alert-unit{font-size:8px;color:var(--mt);text-transform:uppercase;letter-spacing:0.5px}
     .spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin 0.8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -144,18 +157,17 @@
 
 <div class="main">
   <div class="page">
-    <div class="topbar an"><div class="topbar-t">Project <em>Manager</em></div><div><button class="topbar-btn" onclick="loadData()">↻ Actualizar</button></div></div>
+    <div class="topbar an"><div class="topbar-t">Project <em>Manager</em></div><div style="display:flex;gap:8px;align-items:center"><button class="fb" onclick="clearF()" style="color:var(--rd);border-color:rgba(239,68,68,0.3)">✕ Limpiar filtros</button><button class="topbar-btn" onclick="loadData()">↻ Actualizar</button></div></div>
+    <div id="alertsBox"></div>
     <div class="filters an" style="animation-delay:50ms">
       <div class="fg"><span class="fl">Estado</span><div id="fEst"></div></div>
       <div class="fsep"></div>
       <div class="fg"><span class="fl">Tipo</span><div id="fCat"></div></div>
-      <div class="fsep"></div>
-      <div class="fg"><span class="fl">Buscar</span><input type="text" class="search-input" id="searchBox" placeholder="ID, dirección, cliente..." oninput="render()"/></div>
-      <button class="fb" onclick="clearF()" style="color:var(--rd);border-color:rgba(239,68,68,0.3)">✕ Limpiar</button>
     </div>
+    <div style="margin-bottom:20px"><input type="text" class="search-input" id="searchBox" placeholder="Buscar por ID, dirección, cliente, ciudad..." oninput="render()" style="width:100%;padding:10px 16px;font-size:12px;border-radius:var(--r)"/></div>
     <div class="kpi-row" id="kpis"><div class="loading" style="grid-column:1/-1"><div class="spinner"></div></div></div>
     <div class="g2" id="row1"></div>
-    <div class="g3" id="row2"></div>
+    <div class="g2" id="rowTimelines"></div>
     <div class="g2" id="row3"></div>
     <div class="card an" style="animation-delay:500ms" id="tableCard"></div>
   </div>
@@ -197,40 +209,89 @@ async function loadData(){
 }
 
 function render(){
-  renderFilters();var ps=filtered(),tot=ps.length;
+  renderFilters();var ps=filtered(),tot=ps.length;var now=new Date();
   var activos=ps.filter(p=>!['Finalizado','Cancelado','Completado'].includes(p.estado)).length;
   var finalizados=ps.filter(p=>p.estado==='Finalizado').length;
-  var thisMonth=monthKey(new Date());var nuevos=ps.filter(p=>monthKey(p.created)===thisMonth).length;
+  var thisMonth=monthKey(now);var nuevos=ps.filter(p=>monthKey(p.created)===thisMonth).length;
   var avgDias=activos>0?Math.round(ps.filter(p=>!['Finalizado','Cancelado','Completado'].includes(p.estado)).reduce((a,p)=>a+p.dias,0)/activos):0;
-  document.getElementById('kpis').innerHTML=kpi(tot,'Total Proyectos','var(--acg)')+kpi(activos,'Activos','linear-gradient(135deg,var(--bl),var(--cy))')+kpi(finalizados,'Finalizados','linear-gradient(135deg,var(--gn),#34d399)')+kpi(nuevos,'Nuevos este Mes','linear-gradient(135deg,var(--am),var(--or))')+kpi(avgDias+'d','Prom. Días Activos','linear-gradient(135deg,var(--pp),var(--pk))');
 
+  // ── ALERTS ──
+  var alerts=[];
+  var in30=new Date(now.getTime()+30*864e5);
+  // Alert 1: Expire within 30 days
+  ps.forEach(p=>{
+    if(!p.expire||['Finalizado','Cancelado','Completado'].includes(p.estado))return;
+    var exp=new Date(p.expire);if(isNaN(exp))return;
+    if(exp<=in30&&exp>=now){
+      var daysLeft=Math.ceil((exp-now)/864e5);
+      var sp=splitP(p.title);
+      alerts.push({id:sp.id,addr:sp.addr,type:'expire',icon:'⏰',label:'Próximo a expirar',desc:'Expira en '+daysLeft+' días ('+exp.toLocaleDateString('es-ES')+')',days:daysLeft,color:'var(--rd)',bg:'var(--rds)',dib:p.cliente});
+    }else if(exp<now){
+      var daysOver=Math.ceil((now-exp)/864e5);
+      var sp2=splitP(p.title);
+      alerts.push({id:sp2.id,addr:sp2.addr,type:'expired',icon:'🚨',label:'EXPIRADO',desc:'Expiró hace '+daysOver+' días ('+exp.toLocaleDateString('es-ES')+')',days:-daysOver,color:'var(--rd)',bg:'var(--rds)',dib:p.cliente});
+    }
+  });
+  // Alert 2: Issued >4 months and still Aprobado
+  ps.forEach(p=>{
+    if(!p.issued||p.estado!=='Aprobado')return;
+    var iss=new Date(p.issued);if(isNaN(iss))return;
+    var daysSince=Math.floor((now-iss)/864e5);
+    if(daysSince>=120){
+      var sp=splitP(p.title);
+      alerts.push({id:sp.id,addr:sp.addr,type:'stale',icon:'⚠️',label:'Aprobado sin avance',desc:'Issued hace '+daysSince+' días y sigue en Aprobado',days:daysSince,color:'var(--am)',bg:'var(--ams)',dib:p.cliente});
+    }
+  });
+  alerts.sort((a,b)=>(a.days||0)-(b.days||0));
+
+  var alertsHTML='';
+  if(alerts.length>0){
+    alertsHTML='<div class="alert-box an"><div class="alert-title"><span>🚨</span> Alertas ('+alerts.length+')</div><div class="alert-list">';
+    alerts.forEach(a=>{
+      alertsHTML+='<div class="alert-item" style="border-color:'+a.color+'20"><div class="alert-icon">'+a.icon+'</div><div class="alert-info"><div class="alert-id">'+esc(a.id)+' <span class="badge" style="background:'+a.bg+';color:'+a.color+'">'+a.label+'</span></div><div class="alert-desc">'+esc(a.desc)+(a.dib?' — '+esc(a.dib):'')+'</div></div><div class="alert-right"><div class="alert-days" style="color:'+a.color+'">'+Math.abs(a.days)+'</div><div class="alert-unit">días</div></div></div>';
+    });
+    alertsHTML+='</div></div>';
+  }
+  document.getElementById('alertsBox').innerHTML=alertsHTML;
+
+  // ── KPIs ──
+  document.getElementById('kpis').innerHTML=kpi(tot,'Total Proyectos','var(--acg)')+kpi(activos,'Activos','linear-gradient(135deg,var(--bl),var(--cy))')+kpi(finalizados,'Finalizados','linear-gradient(135deg,var(--gn),#34d399)')+kpi(nuevos,'Nuevos este Mes','linear-gradient(135deg,var(--am),var(--or))')+(alerts.length>0?kpi(alerts.length,'Alertas','linear-gradient(135deg,var(--rd),var(--or))'):kpi(avgDias+'d','Prom. Días','linear-gradient(135deg,var(--pp),var(--pk))'));
+
+  // ── ROW1: Estado + Tipo ──
   var estData={};ESTADOS.forEach(e=>{estData[e]=ps.filter(p=>p.estado===e).length});var estSorted=ESTADOS.filter(e=>estData[e]>0).sort((a,b)=>estData[b]-estData[a]);var estMax=Math.max(...estSorted.map(e=>estData[e]),1);
   var estBars=estSorted.map((e,i)=>'<div class="br" onclick="setFEst(\''+e.replace(/'/g,"\\'")+'\')" title="'+esc(e)+'"><div class="bn" title="'+esc(e)+'">'+esc(e)+'</div><div class="bt"><div class="bf" style="width:'+Math.round(estData[e]/estMax*100)+'%;background:'+getColor(i)+'"><span class="bv">'+estData[e]+'</span></div></div></div>').join('');
   var catData={};CATS.forEach(c=>{catData[c]=ps.filter(p=>p.cat===c).length});var catSorted=CATS.filter(c=>catData[c]>0).sort((a,b)=>catData[b]-catData[a]);var catMax=Math.max(...catSorted.map(c=>catData[c]),1);
   var catBars=catSorted.map((c,i)=>'<div class="br" onclick="setFCat(\''+c.replace(/'/g,"\\'")+'\')" title="'+esc(c)+'"><div class="bn" title="'+esc(c)+'">'+esc(c)+'</div><div class="bt"><div class="bf" style="width:'+Math.round(catData[c]/catMax*100)+'%;background:'+getColor(i+5)+'"><span class="bv">'+catData[c]+'</span></div></div></div>').join('');
   document.getElementById('row1').innerHTML='<div class="card an" style="animation-delay:150ms"><div class="ct"><span>📊</span> Estado del Permiso <span class="ct-hint">clic para filtrar</span></div><div class="bc">'+estBars+'</div></div><div class="card an" style="animation-delay:200ms"><div class="ct"><span>📂</span> Tipo de Proyecto <span class="ct-hint">clic para filtrar</span></div><div class="bc">'+catBars+'</div></div>';
 
+  // ── ROW Timelines: Left column (created + sometido stacked), Right column (cities + aging stacked) ──
+  // Proyectos creados por mes
   var months={};ps.forEach(p=>{var mk=monthKey(p.created);if(mk)months[mk]=(months[mk]||0)+1});var mKeys=Object.keys(months).sort().slice(-12);var mMax=Math.max(...mKeys.map(k=>months[k]),1);
-  var tlHTML='<div class="tl-chart">'+mKeys.map((k,i)=>{var h=Math.round(months[k]/mMax*100);return'<div class="tl-bar-wrap"><div class="tl-bar-v">'+months[k]+'</div><div style="flex:1;display:flex;align-items:flex-end;width:100%"><div class="tl-bar" style="height:'+Math.max(h,5)+'%;width:100%;background:'+getColor(i)+'"></div></div><div class="tl-bar-l">'+monthLabel(k)+'</div></div>'}).join('')+'</div>';
+  var tlCreated='<div class="ct" style="margin-bottom:10px"><span>📅</span> Creados por Mes</div><div class="tl-chart" style="height:90px">'+mKeys.map((k,i)=>{var h=Math.round(months[k]/mMax*100);return'<div class="tl-bar-wrap"><div class="tl-bar-v">'+months[k]+'</div><div style="flex:1;display:flex;align-items:flex-end;width:100%"><div class="tl-bar" style="height:'+Math.max(h,5)+'%;width:100%;background:'+getColor(i)+'"></div></div><div class="tl-bar-l">'+monthLabel(k)+'</div></div>'}).join('')+'</div>';
 
-  var cityData={};ps.forEach(p=>{if(p.city&&p.city!=='OTRA')cityData[p.city]=(cityData[p.city]||0)+1});var citySorted=Object.entries(cityData).sort((a,b)=>b[1]-a[1]).slice(0,8);var cityMax=citySorted.length?citySorted[0][1]:1;
-  var cityBars=citySorted.map((c,i)=>'<div class="br"><div class="bn" title="'+esc(c[0])+'">'+esc(c[0])+'</div><div class="bt"><div class="bf" style="width:'+Math.round(c[1]/cityMax*100)+'%;background:'+getColor(i+2)+'"><span class="bv">'+c[1]+'</span></div></div></div>').join('');
+  // Sometidos por mes
+  var smMonths={};ps.forEach(p=>{var mk=monthKey(p.fechaSometido);if(mk)smMonths[mk]=(smMonths[mk]||0)+1});var smKeys=Object.keys(smMonths).sort().slice(-12);var smMax=Math.max(...smKeys.map(k=>smMonths[k]),1);
+  var tlSometido='<div class="ct" style="margin-bottom:10px;margin-top:16px"><span>📨</span> Sometidos por Mes</div><div class="tl-chart" style="height:90px">'+smKeys.map((k,i)=>{var h=Math.round(smMonths[k]/smMax*100);return'<div class="tl-bar-wrap"><div class="tl-bar-v">'+smMonths[k]+'</div><div style="flex:1;display:flex;align-items:flex-end;width:100%"><div class="tl-bar" style="height:'+Math.max(h,5)+'%;width:100%;background:'+getColor(i+6)+'"></div></div><div class="tl-bar-l">'+monthLabel(k)+'</div></div>'}).join('')+'</div>';
 
-  var totalValue=ps.reduce((a,p)=>a+(p.jobValue||0),0),avgValue=tot>0?Math.round(totalValue/tot):0;
-  var activeValue=ps.filter(p=>!['Finalizado','Cancelado','Completado'].includes(p.estado)).reduce((a,p)=>a+(p.jobValue||0),0);
-  var valHTML='<div style="text-align:center;padding:12px 0"><div style="font-family:JetBrains Mono;font-size:28px;font-weight:700;color:var(--gn)">$'+totalValue.toLocaleString()+'</div><div style="font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:1px;margin-top:4px">Valor Total</div></div><div style="display:flex;gap:12px;margin-top:12px"><div style="flex:1;background:var(--sf2);border-radius:var(--rs);padding:14px;text-align:center"><div style="font-family:JetBrains Mono;font-size:20px;font-weight:700;color:var(--ac2)">$'+avgValue.toLocaleString()+'</div><div style="font-size:9px;color:var(--mt);text-transform:uppercase;margin-top:3px">Promedio</div></div><div style="flex:1;background:var(--sf2);border-radius:var(--rs);padding:14px;text-align:center"><div style="font-family:JetBrains Mono;font-size:20px;font-weight:700;color:var(--bl)">$'+activeValue.toLocaleString()+'</div><div style="font-size:9px;color:var(--mt);text-transform:uppercase;margin-top:3px">Activos</div></div></div>';
+  // Top ciudades
+  var cityData={};ps.forEach(p=>{if(p.city&&p.city!=='OTRA')cityData[p.city]=(cityData[p.city]||0)+1});var citySorted=Object.entries(cityData).sort((a,b)=>b[1]-a[1]).slice(0,6);var cityMax=citySorted.length?citySorted[0][1]:1;
+  var cityBars='<div class="ct" style="margin-bottom:10px"><span>🏙️</span> Top Ciudades</div><div class="bc">'+citySorted.map((c,i)=>'<div class="br"><div class="bn" title="'+esc(c[0])+'">'+esc(c[0])+'</div><div class="bt"><div class="bf" style="width:'+Math.round(c[1]/cityMax*100)+'%;background:'+getColor(i+2)+'"><span class="bv">'+c[1]+'</span></div></div></div>').join('')+'</div>';
 
-  document.getElementById('row2').innerHTML='<div class="card an" style="animation-delay:250ms"><div class="ct"><span>📅</span> Proyectos por Mes (últimos 12)</div>'+tlHTML+'</div><div class="card an" style="animation-delay:300ms"><div class="ct"><span>🏙️</span> Top Ciudades</div><div class="bc">'+cityBars+'</div></div><div class="card an" style="animation-delay:350ms"><div class="ct"><span>💰</span> Valor de Proyectos</div>'+valHTML+'</div>';
+  // Aging
+  var actPs=ps.filter(p=>!['Finalizado','Cancelado','Completado'].includes(p.estado));
+  var aging=[{label:'0-30d',min:0,max:30,color:'var(--gn)'},{label:'31-90d',min:31,max:90,color:'var(--am)'},{label:'91-180d',min:91,max:180,color:'var(--or)'},{label:'181-365d',min:181,max:365,color:'var(--rd)'},{label:'+365d',min:366,max:99999,color:'var(--pp)'}];
+  var agingHTML='<div class="ct" style="margin-bottom:10px;margin-top:16px"><span>⏱️</span> Aging Activos</div>'+aging.map(a=>{var c=actPs.filter(p=>p.dias>=a.min&&p.dias<=a.max).length;var pct=actPs.length>0?Math.round(c/actPs.length*100):0;return'<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div style="width:60px;font-size:10px;color:var(--tx2);text-align:right">'+a.label+'</div><div style="flex:1;height:18px;background:rgba(255,255,255,0.03);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+a.color+';border-radius:4px;display:flex;align-items:center;padding:0 6px;min-width:fit-content"><span style="font-family:JetBrains Mono;font-size:9px;font-weight:600;color:rgba(255,255,255,0.9)">'+c+'</span></div></div><div style="width:30px;text-align:right;font-family:JetBrains Mono;font-size:9px;color:var(--mt)">'+pct+'%</div></div>'}).join('');
 
+  document.getElementById('rowTimelines').innerHTML='<div class="card an" style="animation-delay:250ms">'+tlCreated+tlSometido+'</div><div class="card an" style="animation-delay:300ms">'+cityBars+agingHTML+'</div>';
+
+  // ── ROW3: Clientes + Contratistas ──
   var cliData={};ps.filter(p=>p.cliente).forEach(p=>{cliData[p.cliente]=(cliData[p.cliente]||0)+1});var cliSorted=Object.entries(cliData).sort((a,b)=>b[1]-a[1]).slice(0,8);var cliMax=cliSorted.length?cliSorted[0][1]:1;
   var cliBars=cliSorted.map((c,i)=>'<div class="br"><div class="bn" title="'+esc(c[0])+'">'+esc(c[0])+'</div><div class="bt"><div class="bf" style="width:'+Math.round(c[1]/cliMax*100)+'%;background:'+getColor(i+8)+'"><span class="bv">'+c[1]+'</span></div></div></div>').join('');
+  var conData={};ps.filter(p=>p.contratista).forEach(p=>{conData[p.contratista]=(conData[p.contratista]||0)+1});var conSorted=Object.entries(conData).sort((a,b)=>b[1]-a[1]).slice(0,8);var conMax=conSorted.length?conSorted[0][1]:1;
+  var conBars=conSorted.map((c,i)=>'<div class="br"><div class="bn" title="'+esc(c[0])+'">'+esc(c[0])+'</div><div class="bt"><div class="bf" style="width:'+Math.round(c[1]/conMax*100)+'%;background:'+getColor(i+3)+'"><span class="bv">'+c[1]+'</span></div></div></div>').join('');
+  document.getElementById('row3').innerHTML='<div class="card an" style="animation-delay:400ms"><div class="ct"><span>👥</span> Top Clientes</div><div class="bc">'+cliBars+'</div></div><div class="card an" style="animation-delay:450ms"><div class="ct"><span>🏗️</span> Top Contratistas</div><div class="bc">'+conBars+'</div></div>';
 
-  var actPs=ps.filter(p=>!['Finalizado','Cancelado','Completado'].includes(p.estado));
-  var aging=[{label:'0-30 días',min:0,max:30,color:'var(--gn)'},{label:'31-90 días',min:31,max:90,color:'var(--am)'},{label:'91-180 días',min:91,max:180,color:'var(--or)'},{label:'181-365 días',min:181,max:365,color:'var(--rd)'},{label:'+365 días',min:366,max:99999,color:'var(--pp)'}];
-  var agingHTML=aging.map(a=>{var c=actPs.filter(p=>p.dias>=a.min&&p.dias<=a.max).length;var pct=actPs.length>0?Math.round(c/actPs.length*100):0;return'<div style="display:flex;align-items:center;gap:10px;padding:6px 0"><div style="width:90px;font-size:11px;color:var(--tx2);text-align:right">'+a.label+'</div><div style="flex:1;height:20px;background:rgba(255,255,255,0.03);border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+a.color+';border-radius:4px;display:flex;align-items:center;padding:0 6px;min-width:fit-content"><span style="font-family:JetBrains Mono;font-size:10px;font-weight:600;color:rgba(255,255,255,0.9)">'+c+'</span></div></div><div style="width:35px;text-align:right;font-family:JetBrains Mono;font-size:10px;color:var(--mt)">'+pct+'%</div></div>'}).join('');
-
-  document.getElementById('row3').innerHTML='<div class="card an" style="animation-delay:400ms"><div class="ct"><span>👥</span> Top Clientes</div><div class="bc">'+cliBars+'</div></div><div class="card an" style="animation-delay:450ms"><div class="ct"><span>⏱️</span> Aging de Proyectos Activos</div>'+agingHTML+'</div>';
-
+  // ── TABLE ──
   var sortedPs=ps.sort((a,b)=>b.dias-a.dias);
   var rows=sortedPs.slice(0,100).map(p=>{var sp=splitP(p.title);var ec=getColor(ESTADOS.indexOf(p.estado)%CP.length);return'<tr onclick="showM('+p.id+')"><td style="font-weight:700;color:var(--ac2)">'+esc(sp.id)+'</td><td>'+esc(p.city)+'</td><td><span class="badge" style="background:'+hRgba(ec,0.15)+';color:'+ec+'">'+esc(p.estado)+'</span></td><td>'+esc(p.cat)+'</td><td>'+esc(p.cliente)+'</td><td style="font-family:JetBrains Mono;font-weight:600">'+Math.round(p.dias)+'</td><td style="font-family:JetBrains Mono">'+((p.jobValue||0)>0?'$'+(p.jobValue).toLocaleString():'—')+'</td><td>'+esc(p.dwstatus)+'</td></tr>'}).join('');
   document.getElementById('tableCard').innerHTML='<div class="ct"><span>📋</span> Detalle de Proyectos <span class="ct-hint">'+ps.length+' proyectos — clic en fila para detalle</span></div><div style="overflow-x:auto;max-height:500px;overflow-y:auto"><table class="tbl"><thead><tr><th>Proyecto</th><th>Ciudad</th><th>Estado</th><th>Tipo</th><th>Cliente</th><th>Días</th><th>Valor</th><th>DW Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
