@@ -279,7 +279,7 @@ function buildDynamicLists(){
 }
 
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
-function splitP(f){if(!f)return{id:'',addr:''};var m=f.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);return m?{id:m[1].toUpperCase(),addr:(m[2]||'').replace(/^-\s*/,'').trim()}:{id:f,addr:''}}
+function splitP(f){if(!f)return{id:'',addr:''};var m=f.match(/^([A-Za-z0-9]{2,5}-[A-Za-z0-9]{3,5})[- ]*(.*)/);return m?{id:m[1].toUpperCase(),addr:(m[2]||'').replace(/^-\s*/,'').trim()}:{id:f,addr:''}}
 function filtered(){var q=(document.getElementById('searchBox')?document.getElementById('searchBox').value:'').toLowerCase();return allProjects.filter(p=>{if(fDib&&p.dib!==fDib)return false;if(fSt&&p.st!==fSt)return false;if(q&&!p.title.toLowerCase().includes(q))return false;return true})}
 
 function setFDib(v){fDib=fDib===v?'':v;selectedDib='';closeDetail();renderAll()}

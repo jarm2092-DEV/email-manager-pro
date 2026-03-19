@@ -339,10 +339,10 @@ function getProjects(){
   spProjects.forEach(p=>{if(!merged.some(m=>m.toUpperCase()===p.toUpperCase()))merged.push(p)});
   return merged.sort((a,b)=>a.localeCompare(b));
 }
-function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z]{2,5}-\d{3,5}/);return m?m[0].toUpperCase():null}
+function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z0-9]{2,5}-[A-Za-z0-9]{3,5}/);return m?m[0].toUpperCase():null}
 function splitProject(full){
   if(!full)return{id:'',address:''};
-  const m=full.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);
+  const m=full.match(/^([A-Za-z0-9]{2,5}-[A-Za-z0-9]{3,5})[- ]*(.*)/);
   if(m)return{id:m[1].toUpperCase(),address:(m[2]||'').replace(/^-\s*/,'').trim()};
   return{id:full,address:''};
 }
@@ -432,7 +432,7 @@ function onItemChanged(){
 }
 
 // ── Categories ──
-function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z]{2,5}-\d{3,5}/);return m?m[0].toUpperCase():null}
+function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z0-9]{2,5}-[A-Za-z0-9]{3,5}/);return m?m[0].toUpperCase():null}
 
 function ensureMasterCategory(){
   try{Office.context.mailbox.masterCategories.getAsync(function(r){
