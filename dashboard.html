@@ -6,6 +6,7 @@
   <title>Dashboard — Drawing Workload</title>
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
+
     :root{--bg:#050507;--bg2:#0c0c10;--surface:rgba(255,255,255,0.03);--surface2:rgba(255,255,255,0.06);--border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);--text:#f0f0f5;--text2:#8b8b9e;--muted:#55556a;--accent:#7c5cfc;--accent2:#a78bfa;--accent-g:linear-gradient(135deg,#7c5cfc,#c084fc);--green:#22c55e;--green-s:rgba(34,197,94,0.12);--amber:#eab308;--amber-s:rgba(234,179,8,0.12);--red:#ef4444;--red-s:rgba(239,68,68,0.12);--blue:#3b82f6;--blue-s:rgba(59,130,246,0.12);--pink:#ec4899;--pink-s:rgba(236,72,153,0.12);--purple:#a855f7;--purple-s:rgba(168,85,247,0.12);--orange:#f97316;--orange-s:rgba(249,115,22,0.12);--cyan:#06b6d4;--cyan-s:rgba(6,182,212,0.12);--radius:16px;--radius-sm:10px}
     *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
     body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
@@ -103,44 +104,139 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     .anim{animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards;opacity:0}
-    @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.filters-bar{flex-direction:column;align-items:flex-start}.filter-sep{display:none}}
+    @media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.alert-cards{grid-template-columns:repeat(2,1fr)}.sidebar{width:64px}.c .sb-brand,.sb-brand,.sb-sec,.sb-link .sb-t,.sb-ft,.sb-tog .sb-tog-text{opacity:0;width:0;height:auto;padding:0;overflow:hidden}.sb-link{justify-content:center;padding:9px}.sb-tog button{justify-content:center}.main{margin-left:64px}.filters-bar{flex-direction:column;align-items:flex-start}.filter-sep{display:none}}
     @media(max-width:600px){.kpi-row{grid-template-columns:1fr}.page{padding:16px}}
+    /* Sidebar */
+    body{display:flex}
+    .sidebar{width:240px;height:100vh;position:fixed;left:0;top:0;z-index:100;background:linear-gradient(180deg,var(--bg2) 0%,#08080c 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:width 0.3s cubic-bezier(0.16,1,0.3,1);overflow:hidden}
+    .sidebar.c{width:64px}
+    .sb-head{padding:20px 16px 12px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+    .sb-logo{width:36px;height:36px;min-width:36px;background:var(--accent-g);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 16px rgba(124,92,252,0.25)}
+    .sb-brand{overflow:hidden;white-space:nowrap;transition:opacity 0.15s}
+    .sb-name{font-size:13px;font-weight:800;letter-spacing:-0.3px;background:var(--accent-g);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .sb-sub{font-size:8px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;font-weight:600}
+    .c .sb-brand{opacity:0;width:0}
+    .sb-tog{width:100%;padding:0 12px;margin-bottom:8px;flex-shrink:0;display:flex}
+    .sb-tog button{width:100%;padding:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:600;transition:all 0.2s;display:flex;align-items:center;gap:8px;overflow:hidden;white-space:nowrap}
+    .sb-tog button:hover{background:var(--surface2);color:var(--text)}
+    .c .sb-tog button{justify-content:center}
+    .sb-tog .sb-tog-text{transition:opacity 0.15s}.c .sb-tog .sb-tog-text{opacity:0;width:0}
+    .sb-nav{flex:1;display:flex;flex-direction:column;gap:1px;padding:0 10px;overflow-y:auto;overflow-x:hidden}
+    .sb-sec{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px;font-weight:700;padding:16px 10px 6px;white-space:nowrap;transition:all 0.15s}
+    .c .sb-sec{opacity:0;height:0;padding:0;overflow:hidden}
+    .sb-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--text2);text-decoration:none;font-size:12px;font-weight:500;transition:all 0.15s;white-space:nowrap;overflow:hidden;position:relative;border:1px solid transparent}
+    .sb-link:hover{background:var(--surface2);color:var(--text)}
+    .sb-link.act{background:rgba(124,92,252,0.08);color:var(--accent2);border-color:rgba(124,92,252,0.12)}
+    .sb-link .sb-i{width:22px;height:22px;min-width:22px;display:flex;align-items:center;justify-content:center;font-size:15px}
+    .sb-link .sb-t{overflow:hidden;text-overflow:ellipsis;transition:opacity 0.15s}.c .sb-link .sb-t{opacity:0;width:0}
+    .c .sb-link{justify-content:center;padding:9px}
+    .c .sb-link:hover::after{content:attr(data-tip);position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);background:#1a1a24;border:1px solid var(--border2);color:var(--text);padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;white-space:nowrap;z-index:300;box-shadow:0 8px 24px rgba(0,0,0,0.5);pointer-events:none}
+    .sb-foot{padding:14px 16px;border-top:1px solid var(--border);flex-shrink:0;overflow:hidden}
+    .sb-ft{font-size:9px;color:var(--muted);white-space:nowrap;transition:opacity 0.15s}.c .sb-ft{opacity:0}
+    .sb-ftime{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);margin-top:2px;white-space:nowrap}
+    .main{margin-left:240px;flex:1;min-height:100vh;transition:margin-left 0.3s cubic-bezier(0.16,1,0.3,1)}
+    .sidebar.c~.main{margin-left:64px}
+    
+    /* Alert cards */
+    .alert-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .alert-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden}
+    .alert-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+    .alert-card.has-alerts{border-color:rgba(239,68,68,0.2)}
+    .alert-card .ac-bar{position:absolute;top:0;left:0;right:0;height:2px}
+    .alert-card .ac-top{display:flex;align-items:center;justify-content:space-between}
+    .alert-card .ac-icon{font-size:20px}
+    .alert-card .ac-count{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;line-height:1}
+    .alert-card .ac-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-top:6px}
+    .alert-card.zero{opacity:0.5;cursor:default}.alert-card.zero:hover{transform:none;box-shadow:none}
+    
+    /* Alert Modal */
+    .amodal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:250;display:none;align-items:flex-start;justify-content:center;padding:60px 24px 24px;overflow-y:auto}
+    .amodal-ov.open{display:flex}
+    .amodal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);width:100%;max-width:780px;box-shadow:0 24px 64px rgba(0,0,0,0.6);animation:amSlide 0.35s cubic-bezier(0.16,1,0.3,1)}
+    @keyframes amSlide{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+    .amodal-h{padding:18px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+    .amodal-h-left{display:flex;align-items:center;gap:10px}
+    .amodal-h-icon{font-size:22px}
+    .amodal-h-title{font-size:16px;font-weight:800}
+    .amodal-h-count{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px}
+    .amodal-b{padding:16px 24px;max-height:55vh;overflow-y:auto}
+    .ai{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:6px;transition:all 0.15s}
+    .ai:hover{background:var(--surface2);border-color:var(--border2)}
+    .ai-id{font-weight:700;font-size:13px;min-width:90px}
+    .ai-info{flex:1;min-width:0}
+    .ai-desc{font-size:11px;color:var(--text2)}
+    .ai-sub{font-size:10px;color:var(--muted);margin-top:2px}
+    .ai-right{text-align:right;flex-shrink:0}
+    .ai-days{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700}
+    .ai-unit{font-size:8px;color:var(--muted);text-transform:uppercase}
+    
+    .search-box{width:100%;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:12px;transition:border-color 0.2s;margin-bottom:20px}
+    .search-box:focus{outline:none;border-color:var(--accent)}
+    .search-box::placeholder{color:var(--muted)}
+
   </style>
 </head>
 <body>
-<div class="page">
-  <div class="dash-header anim">
-    <div>
-      <div class="dash-title">Drawing Workload</div>
-      <div class="dash-sub">Balance de carga y capacidad — <span id="timestamp"></span></div>
-    </div>
-    <div class="dash-actions">
-      <button class="dash-btn" onclick="exportCSV()">📥 Exportar CSV</button>
-      <button class="dash-btn" onclick="loadData()">↻ Actualizar</button>
-      <a href="dwstatus.html" class="dash-btn primary">✏️ Estado de Dibujos</a>
-    </div>
-  </div>
 
-  <div class="filters-bar anim" style="animation-delay:50ms">
-    <div class="filter-group"><span class="filter-lbl">Dibujante</span><div id="fDib"></div></div>
-    <div class="filter-sep"></div>
-    <div class="filter-group"><span class="filter-lbl">Estado</span><div id="fSt"></div></div>
-    <div class="filter-sep"></div>
-    <button class="fbtn" onclick="clearFilters()" style="color:var(--red);border-color:rgba(239,68,68,0.3)">✕ Limpiar</button>
+<aside class="sidebar" id="sb">
+  <div class="sb-head">
+    <div class="sb-logo">⚡</div>
+    <div class="sb-brand"><div class="sb-name">Code Clear Permit</div><div class="sb-sub">Management Suite</div></div>
   </div>
+  <div class="sb-tog"><button onclick="togSB()" id="sbBtn"><span style="font-size:14px" id="sbArr">◀</span><span class="sb-tog-text">Colapsar</span></button></div>
+  <nav class="sb-nav">
+    <div class="sb-sec">Dashboards</div>
+    <a href="pm-dashboard.html" class="sb-link" data-tip="Project Manager"><div class="sb-i">📋</div><div class="sb-t">Project Manager</div></a>
+    <a href="#" class="sb-link act" data-tip="Drawing Workload"><div class="sb-i">📊</div><div class="sb-t">Drawing Workload</div></a>
+    <div class="sb-sec">Herramientas</div>
+    <a href="dwstatus.html" class="sb-link" data-tip="Estado de Dibujos"><div class="sb-i">✏️</div><div class="sb-t">Estado de Dibujos</div></a>
+    <div class="sb-sec">Externo</div>
+    <a href="https://outlook.office.com/mail/" target="_blank" class="sb-link" data-tip="Outlook Web"><div class="sb-i">📧</div><div class="sb-t">Outlook Web</div></a>
+    <a href="https://avpconsultinginc.sharepoint.com/sites/CODECLEARPERMIT" target="_blank" class="sb-link" data-tip="SharePoint"><div class="sb-i">🗂️</div><div class="sb-t">SharePoint</div></a>
+  </nav>
+  <div class="sb-foot"><div class="sb-ft">Última actualización</div><div class="sb-ftime" id="timestamp"></div></div>
+</aside>
 
-  <div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeDetail()">
-    <div class="modal" id="modalContent"></div>
+<div class="main">
+  <div class="page">
+    <div class="dash-header anim">
+      <div><div class="dash-title">Drawing Workload</div><div class="dash-sub">Balance de carga y capacidad por dibujante</div></div>
+      <div class="dash-actions">
+        <button class="fbtn" onclick="clearFilters()" style="color:var(--red);border-color:rgba(239,68,68,0.3)">✕ Limpiar filtros</button>
+        <button class="dash-btn" onclick="exportCSV()">📥 CSV</button>
+        <button class="dash-btn" onclick="loadData()">↻ Actualizar</button>
+      </div>
+    </div>
+
+    <div id="alertCards"></div>
+    
+    <div class="filters-bar anim" style="animation-delay:50ms">
+      <div class="filter-group"><span class="filter-lbl">Dibujante</span><div id="fDib"></div></div>
+      <div class="filter-sep"></div>
+      <div class="filter-group"><span class="filter-lbl">Estado</span><div id="fSt"></div></div>
+    </div>
+    
+    <input type="text" class="search-box" id="searchBox" placeholder="Buscar por proyecto, dirección..." oninput="renderAll()"/>
+
+    <div id="modalOverlay" class="modal-overlay" onclick="if(event.target===this)closeDetail()">
+      <div class="modal" id="modalContent"></div>
+    </div>
+    <div class="kpi-row" id="kpis"><div class="loading-full" style="grid-column:1/-1"><div class="spinner"></div></div></div>
+    <div class="grid-2" id="row1"></div>
+    <div class="grid-2" id="row2"></div>
+    <div class="card anim" style="animation-delay:500ms" id="tableCard"></div>
+    <div id="recsContainer"></div>
   </div>
-  <div id="alertsContainer"></div>
-  <div class="kpi-row" id="kpis"><div class="loading-full" style="grid-column:1/-1"><div class="spinner"></div></div></div>
-  <div class="grid-2" id="row1"></div>
-  <div class="grid-2" id="row2"></div>
-  <div class="card anim" style="animation-delay:500ms" id="tableCard"></div>
-  <div id="recsContainer"></div>
 </div>
 
+<div class="amodal-ov" id="amodalOv" onclick="if(event.target===this)closeAModal()"><div class="amodal" id="amodalC"></div></div>
+
 <script>
+
+function togSB(){var s=document.getElementById('sb');s.classList.toggle('c');document.getElementById('sbArr').textContent=s.classList.contains('c')?'▶':'◀';localStorage.setItem('sb_c',s.classList.contains('c')?'1':'0')}
+if(localStorage.getItem('sb_c')==='1'){document.getElementById('sb').classList.add('c');document.getElementById('sbArr').textContent='▶'}
+
+
 var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/6bd81083debf4e7a8100cd389d9cb8e1/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=j9uUHpx-GrJKBF-ld5fspTK9zyPGsbcA5HgwyqrX0o0';
 var DIBS=[];
 var ST_ORDER=[];
@@ -184,7 +280,7 @@ function buildDynamicLists(){
 
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 function splitP(f){if(!f)return{id:'',addr:''};var m=f.match(/^([A-Za-z]{2,5}-\d{3,5})[- ]*(.*)/);return m?{id:m[1].toUpperCase(),addr:(m[2]||'').replace(/^-\s*/,'').trim()}:{id:f,addr:''}}
-function filtered(){return allProjects.filter(p=>{if(fDib&&p.dib!==fDib)return false;if(fSt&&p.st!==fSt)return false;return true})}
+function filtered(){var q=(document.getElementById('searchBox')?document.getElementById('searchBox').value:'').toLowerCase();return allProjects.filter(p=>{if(fDib&&p.dib!==fDib)return false;if(fSt&&p.st!==fSt)return false;if(q&&!p.title.toLowerCase().includes(q))return false;return true})}
 
 function setFDib(v){fDib=fDib===v?'':v;selectedDib='';closeDetail();renderAll()}
 function setFSt(v){fSt=fSt===v?'':v;selectedDib='';closeDetail();renderAll()}
@@ -304,51 +400,41 @@ function renderAll(){
   recsHTML+='</div></div>';
   document.getElementById('recsContainer').innerHTML=recsHTML;
 
-  // ── Alerts ──
+  // ── Alert Cards ──
   var ALERT_RULES=[
-    {status:'Pendiente de informacion (Client)',days:3,icon:'📞',label:'Pend. Info Cliente'},
     {status:'Corrección',days:2,icon:'🔧',label:'Corrección'},
+    {status:'Pendiente de informacion (Client)',days:3,icon:'📞',label:'Pend. Info Cliente'},
     {status:'En espera de Ing Prof',days:5,icon:'⏳',label:'Espera Ing. Prof'},
     {status:'En espera de Ing Express',days:5,icon:'⏳',label:'Espera Ing. Express'}
   ];
   var now=new Date();
-  var alerts=[];
+  var corrAlerts=[],pendAlerts=[],profAlerts=[],expAlerts=[];
   ps.forEach(function(p){
     if(!p.modified)return;
     var rule=ALERT_RULES.find(function(r){return r.status===p.st});
     if(!rule)return;
-    var modDate=new Date(p.modified);
-    if(isNaN(modDate.getTime()))return;
+    var modDate=new Date(p.modified);if(isNaN(modDate.getTime()))return;
     var diffDays=Math.floor((now-modDate)/(1000*60*60*24));
     if(diffDays>=rule.days){
       var sp=splitP(p.title);
-      alerts.push({id:sp.id,addr:sp.addr,status:p.st,dib:p.dib,days:diffDays,rule:rule});
+      var item={id:sp.id,addr:sp.addr,desc:rule.label+' — '+diffDays+' días',days:diffDays,dib:p.dib,status:p.st};
+      if(p.st==='Corrección')corrAlerts.push(item);
+      else if(p.st.includes('Pendiente'))pendAlerts.push(item);
+      else if(p.st.includes('Ing Prof'))profAlerts.push(item);
+      else if(p.st.includes('Ing Express'))expAlerts.push(item);
     }
   });
-  alerts.sort(function(a,b){return b.days-a.days});
+  [corrAlerts,pendAlerts,profAlerts,expAlerts].forEach(a=>a.sort((x,y)=>y.days-x.days));
+  window._dwAlerts={corr:corrAlerts,pend:pendAlerts,prof:profAlerts,exp:expAlerts};
+  var alertCount=corrAlerts.length+pendAlerts.length+profAlerts.length+expAlerts.length;
 
-  var alertsHTML='';
-  if(alerts.length>0){
-    alertsHTML='<div class="card" style="margin-bottom:24px;border-color:rgba(239,68,68,0.2)"><div class="card-title"><span>🚨</span> Alertas de Tiempo ('+alerts.length+') <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:auto">Proyectos que exceden el tiempo máximo en su estado</span></div>';
-    alertsHTML+='<div style="display:flex;flex-direction:column;gap:6px">';
-    alerts.forEach(function(a){
-      var ac=getStColor(a.status),ab=getStBg(a.status);
-      alertsHTML+='<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:'+ab+';border:1px solid '+ac+'20;border-radius:var(--radius-sm);transition:all 0.15s">';
-      alertsHTML+='<div style="font-size:18px;flex-shrink:0">'+a.rule.icon+'</div>';
-      alertsHTML+='<div style="flex:1;min-width:0">';
-      alertsHTML+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong style="color:var(--text);font-size:13px">'+esc(a.id)+'</strong>';
-      alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:'+ab+';color:'+ac+'">'+esc(a.rule.label)+'</span>';
-      alertsHTML+='<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:var(--surface2);color:var(--text2)">✏️ '+esc(a.dib||'Sin asignar')+'</span></div>';
-      alertsHTML+='<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(a.addr)+'</div>';
-      alertsHTML+='</div>';
-      alertsHTML+='<div style="text-align:right;flex-shrink:0"><div style="font-family:JetBrains Mono;font-size:20px;font-weight:700;color:'+ac+'">'+a.days+'</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">días</div></div>';
-      alertsHTML+='</div>';
-    });
-    alertsHTML+='</div></div>';
-  }else{
-    alertsHTML='<div class="card" style="margin-bottom:24px"><div class="card-title"><span>✅</span> Sin Alertas</div><div style="font-size:12px;color:var(--text2);padding:8px 0">Todos los proyectos están dentro de los tiempos esperados.</div></div>';
-  }
-  document.getElementById('alertsContainer').innerHTML=alertsHTML;
+  var acH='<div class="alert-cards">';
+  acH+='<div class="alert-card '+(corrAlerts.length?'has-alerts':'zero')+'" '+(corrAlerts.length?'onclick="openAModal(\x27corr\x27)"':'')+'><div class="ac-bar" style="background:linear-gradient(90deg,var(--red),var(--orange))"></div><div class="ac-top"><div class="ac-icon">🔧</div><div class="ac-count" style="color:var(--red)">'+corrAlerts.length+'</div></div><div class="ac-label">Corrección >2d</div></div>';
+  acH+='<div class="alert-card '+(pendAlerts.length?'has-alerts':'zero')+'" '+(pendAlerts.length?'onclick="openAModal(\x27pend\x27)"':'')+'><div class="ac-bar" style="background:linear-gradient(90deg,var(--orange),var(--amber))"></div><div class="ac-top"><div class="ac-icon">📞</div><div class="ac-count" style="color:var(--orange)">'+pendAlerts.length+'</div></div><div class="ac-label">Pend. Info >3d</div></div>';
+  acH+='<div class="alert-card '+(profAlerts.length?'has-alerts':'zero')+'" '+(profAlerts.length?'onclick="openAModal(\x27prof\x27)"':'')+'><div class="ac-bar" style="background:linear-gradient(90deg,var(--purple),var(--pink))"></div><div class="ac-top"><div class="ac-icon">⏳</div><div class="ac-count" style="color:var(--purple)">'+profAlerts.length+'</div></div><div class="ac-label">Espera Ing Prof >5d</div></div>';
+  acH+='<div class="alert-card '+(expAlerts.length?'has-alerts':'zero')+'" '+(expAlerts.length?'onclick="openAModal(\x27exp\x27)"':'')+'><div class="ac-bar" style="background:linear-gradient(90deg,var(--pink),var(--cyan))"></div><div class="ac-top"><div class="ac-icon">⏳</div><div class="ac-count" style="color:var(--pink)">'+expAlerts.length+'</div></div><div class="ac-label">Espera Ing Exp >5d</div></div>';
+  acH+='</div>';
+  document.getElementById('alertCards').innerHTML=acH;
 
   // Re-render detail if open
   if(selectedDib)showDetail(selectedDib);
@@ -396,7 +482,29 @@ function exportCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 
+
+function openAModal(type){
+  var cfg={
+    corr:{title:'Corrección >2 días',icon:'🔧',color:'var(--red)',bg:'var(--red-s)',data:window._dwAlerts.corr},
+    pend:{title:'Pend. Info Cliente >3 días',icon:'📞',color:'var(--orange)',bg:'var(--orange-s)',data:window._dwAlerts.pend},
+    prof:{title:'Espera Ing Prof >5 días',icon:'⏳',color:'var(--purple)',bg:'var(--purple-s)',data:window._dwAlerts.prof},
+    exp:{title:'Espera Ing Express >5 días',icon:'⏳',color:'var(--pink)',bg:'var(--pink-s)',data:window._dwAlerts.exp}
+  }[type];
+  if(!cfg)return;
+  var items=cfg.data;
+  var html='<div class="amodal-h"><div class="amodal-h-left"><div class="amodal-h-icon">'+cfg.icon+'</div><div class="amodal-h-title">'+cfg.title+'</div><div class="amodal-h-count" style="background:'+cfg.bg+';color:'+cfg.color+'">'+items.length+'</div></div><button class="modal-close" onclick="closeAModal()" style="width:32px;height:32px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px">✕</button></div>';
+  html+='<div class="amodal-b">';
+  items.forEach(function(a){
+    html+='<div class="ai"><div class="ai-id" style="color:'+cfg.color+'">'+esc(a.id)+'</div><div class="ai-info"><div class="ai-desc">'+esc(a.desc)+'</div><div class="ai-sub">'+esc(a.addr)+' — ✏️ '+esc(a.dib||'Sin asignar')+'</div></div><div class="ai-right"><div class="ai-days" style="color:'+cfg.color+'">'+a.days+'</div><div class="ai-unit">días</div></div></div>';
+  });
+  html+='</div>';
+  document.getElementById('amodalC').innerHTML=html;
+  document.getElementById('amodalOv').className='amodal-ov open';
+}
+function closeAModal(){document.getElementById('amodalOv').className='amodal-ov'}
+
 loadData();
+
 </script>
 </body>
 </html>
