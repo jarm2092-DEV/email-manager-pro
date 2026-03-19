@@ -113,19 +113,38 @@
     .md-val{font-size:12px;color:var(--tx)}
 
     .loading{text-align:center;padding:60px;color:var(--mt)}
-    .alert-box{background:var(--sf);border:1px solid rgba(239,68,68,0.2);border-radius:var(--r);padding:18px 22px;margin-bottom:20px}
-    .alert-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:12px}
-    .alert-title span{font-size:15px}
-    .alert-list{display:flex;flex-direction:column;gap:6px}
-    .alert-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--rs);border:1px solid var(--bd);transition:all 0.15s}
-    .alert-item:hover{background:var(--sf2);border-color:var(--bd2)}
-    .alert-icon{font-size:18px;flex-shrink:0}
-    .alert-info{flex:1;min-width:0}
-    .alert-id{font-weight:700;font-size:12px;color:var(--tx)}
-    .alert-desc{font-size:10px;color:var(--tx2);margin-top:2px}
-    .alert-right{text-align:right;flex-shrink:0}
-    .alert-days{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700}
-    .alert-unit{font-size:8px;color:var(--mt);text-transform:uppercase;letter-spacing:0.5px}
+    .alert-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+    .alert-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden}
+    .alert-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3)}
+    .alert-card.has-alerts{border-color:rgba(239,68,68,0.2)}
+    .alert-card .ac-bar{position:absolute;top:0;left:0;right:0;height:2px}
+    .alert-card .ac-top{display:flex;align-items:center;justify-content:space-between}
+    .alert-card .ac-icon{font-size:20px}
+    .alert-card .ac-count{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;line-height:1}
+    .alert-card .ac-label{font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-top:6px}
+    .alert-card.zero{opacity:0.5;cursor:default}
+    .alert-card.zero:hover{transform:none;box-shadow:none}
+
+    /* Alert Modal */
+    .amodal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:250;display:none;align-items:flex-start;justify-content:center;padding:60px 24px 24px;overflow-y:auto}
+    .amodal-ov.open{display:flex}
+    .amodal{background:var(--bg2);border:1px solid var(--bd2);border-radius:var(--r);width:100%;max-width:720px;box-shadow:0 24px 64px rgba(0,0,0,0.6);animation:mIn 0.3s cubic-bezier(0.16,1,0.3,1)}
+    .amodal-h{padding:18px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)}
+    .amodal-h-left{display:flex;align-items:center;gap:10px}
+    .amodal-h-icon{font-size:22px}
+    .amodal-h-title{font-size:16px;font-weight:800;letter-spacing:-0.3px}
+    .amodal-h-count{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px}
+    .amodal-b{padding:16px 24px;max-height:60vh;overflow-y:auto}
+    .amodal-empty{text-align:center;padding:32px;color:var(--mt);font-size:13px}
+    .ai{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--rs);border:1px solid var(--bd);margin-bottom:6px;transition:all 0.15s}
+    .ai:hover{background:var(--sf2);border-color:var(--bd2)}
+    .ai-id{font-weight:700;font-size:13px;color:var(--tx);min-width:90px}
+    .ai-info{flex:1;min-width:0}
+    .ai-desc{font-size:11px;color:var(--tx2)}
+    .ai-sub{font-size:10px;color:var(--mt);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ai-right{text-align:right;flex-shrink:0}
+    .ai-days{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700}
+    .ai-unit{font-size:8px;color:var(--mt);text-transform:uppercase;letter-spacing:0.5px}
     .spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin 0.8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -174,6 +193,7 @@
 </div>
 
 <div class="modal-ov" id="modalOv" onclick="if(event.target===this)closeM()"><div class="modal" id="modalC"></div></div>
+<div class="amodal-ov" id="amodalOv" onclick="if(event.target===this)closeAM()"><div class="amodal" id="amodalC"></div></div>
 
 <script>
 function togSB(){var s=document.getElementById('sb'),b=document.getElementById('sbBtn'),a=document.getElementById('sbArr');s.classList.toggle('c');var col=s.classList.contains('c');a.textContent=col?'▶':'◀';localStorage.setItem('sb_c',col?'1':'0')}
@@ -216,46 +236,53 @@ function render(){
   var avgDias=activos>0?Math.round(ps.filter(p=>!['Finalizado','Cancelado','Completado'].includes(p.estado)).reduce((a,p)=>a+p.dias,0)/activos):0;
 
   // ── ALERTS ──
-  var alerts=[];
+  var expireAlerts=[],expiredAlerts=[],staleAlerts=[];
   var in30=new Date(now.getTime()+30*864e5);
-  // Alert 1: Expire within 30 days
   ps.forEach(p=>{
     if(!p.expire||['Finalizado','Cancelado','Completado'].includes(p.estado))return;
     var exp=new Date(p.expire);if(isNaN(exp))return;
     if(exp<=in30&&exp>=now){
-      var daysLeft=Math.ceil((exp-now)/864e5);
-      var sp=splitP(p.title);
-      alerts.push({id:sp.id,addr:sp.addr,type:'expire',icon:'⏰',label:'Próximo a expirar',desc:'Expira en '+daysLeft+' días ('+exp.toLocaleDateString('es-ES')+')',days:daysLeft,color:'var(--rd)',bg:'var(--rds)',dib:p.cliente});
+      var dl=Math.ceil((exp-now)/864e5);var sp=splitP(p.title);
+      expireAlerts.push({id:sp.id,addr:sp.addr,desc:'Expira en '+dl+' días ('+exp.toLocaleDateString('es-ES')+')',days:dl,cliente:p.cliente,estado:p.estado});
     }else if(exp<now){
-      var daysOver=Math.ceil((now-exp)/864e5);
-      var sp2=splitP(p.title);
-      alerts.push({id:sp2.id,addr:sp2.addr,type:'expired',icon:'🚨',label:'EXPIRADO',desc:'Expiró hace '+daysOver+' días ('+exp.toLocaleDateString('es-ES')+')',days:-daysOver,color:'var(--rd)',bg:'var(--rds)',dib:p.cliente});
+      var dov=Math.ceil((now-exp)/864e5);var sp2=splitP(p.title);
+      expiredAlerts.push({id:sp2.id,addr:sp2.addr,desc:'Expiró hace '+dov+' días ('+exp.toLocaleDateString('es-ES')+')',days:dov,cliente:p.cliente,estado:p.estado});
     }
   });
-  // Alert 2: Issued >4 months and still Aprobado
   ps.forEach(p=>{
     if(!p.issued||p.estado!=='Aprobado')return;
     var iss=new Date(p.issued);if(isNaN(iss))return;
-    var daysSince=Math.floor((now-iss)/864e5);
-    if(daysSince>=120){
-      var sp=splitP(p.title);
-      alerts.push({id:sp.id,addr:sp.addr,type:'stale',icon:'⚠️',label:'Aprobado sin avance',desc:'Issued hace '+daysSince+' días y sigue en Aprobado',days:daysSince,color:'var(--am)',bg:'var(--ams)',dib:p.cliente});
-    }
+    var ds=Math.floor((now-iss)/864e5);
+    if(ds>=120){var sp=splitP(p.title);staleAlerts.push({id:sp.id,addr:sp.addr,desc:'Issued hace '+ds+' días, sigue Aprobado',days:ds,cliente:p.cliente,estado:p.estado})}
   });
-  alerts.sort((a,b)=>(a.days||0)-(b.days||0));
+  expireAlerts.sort((a,b)=>a.days-b.days);
+  expiredAlerts.sort((a,b)=>b.days-a.days);
+  staleAlerts.sort((a,b)=>b.days-a.days);
+  // Store globally for modal access
+  window._alerts={expire:expireAlerts,expired:expiredAlerts,stale:staleAlerts};
+  var totalAlerts=expireAlerts.length+expiredAlerts.length+staleAlerts.length;
 
-  var alertsHTML='';
-  if(alerts.length>0){
-    alertsHTML='<div class="alert-box an"><div class="alert-title"><span>🚨</span> Alertas ('+alerts.length+')</div><div class="alert-list">';
-    alerts.forEach(a=>{
-      alertsHTML+='<div class="alert-item" style="border-color:'+a.color+'20"><div class="alert-icon">'+a.icon+'</div><div class="alert-info"><div class="alert-id">'+esc(a.id)+' <span class="badge" style="background:'+a.bg+';color:'+a.color+'">'+a.label+'</span></div><div class="alert-desc">'+esc(a.desc)+(a.dib?' — '+esc(a.dib):'')+'</div></div><div class="alert-right"><div class="alert-days" style="color:'+a.color+'">'+Math.abs(a.days)+'</div><div class="alert-unit">días</div></div></div>';
-    });
-    alertsHTML+='</div></div>';
-  }
-  document.getElementById('alertsBox').innerHTML=alertsHTML;
+  // Render 3 alert cards
+  var acHTML='<div class="alert-cards">';
+  acHTML+='<div class="alert-card '+(expiredAlerts.length?'has-alerts':'zero')+'" onclick="'+(expiredAlerts.length?'openAM(\"expired\")':'')+'">';
+  acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--rd),var(--or))"></div>';
+  acHTML+='<div class="ac-top"><div class="ac-icon">🚨</div><div class="ac-count" style="color:var(--rd)">'+expiredAlerts.length+'</div></div>';
+  acHTML+='<div class="ac-label">Permisos Expirados</div></div>';
+
+  acHTML+='<div class="alert-card '+(expireAlerts.length?'has-alerts':'zero')+'" onclick="'+(expireAlerts.length?'openAM(\"expire\")':'')+'">';
+  acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--or),var(--am))"></div>';
+  acHTML+='<div class="ac-top"><div class="ac-icon">⏰</div><div class="ac-count" style="color:var(--or)">'+expireAlerts.length+'</div></div>';
+  acHTML+='<div class="ac-label">Próximos a Expirar (30d)</div></div>';
+
+  acHTML+='<div class="alert-card '+(staleAlerts.length?'has-alerts':'zero')+'" onclick="'+(staleAlerts.length?'openAM(\"stale\")':'')+'">';
+  acHTML+='<div class="ac-bar" style="background:linear-gradient(90deg,var(--am),var(--pp))"></div>';
+  acHTML+='<div class="ac-top"><div class="ac-icon">⚠️</div><div class="ac-count" style="color:var(--am)">'+staleAlerts.length+'</div></div>';
+  acHTML+='<div class="ac-label">Aprobados sin Avance (+4m)</div></div>';
+  acHTML+='</div>';
+  document.getElementById('alertsBox').innerHTML=acHTML;
 
   // ── KPIs ──
-  document.getElementById('kpis').innerHTML=kpi(tot,'Total Proyectos','var(--acg)')+kpi(activos,'Activos','linear-gradient(135deg,var(--bl),var(--cy))')+kpi(finalizados,'Finalizados','linear-gradient(135deg,var(--gn),#34d399)')+kpi(nuevos,'Nuevos este Mes','linear-gradient(135deg,var(--am),var(--or))')+(alerts.length>0?kpi(alerts.length,'Alertas','linear-gradient(135deg,var(--rd),var(--or))'):kpi(avgDias+'d','Prom. Días','linear-gradient(135deg,var(--pp),var(--pk))'));
+  document.getElementById('kpis').innerHTML=kpi(tot,'Total Proyectos','var(--acg)')+kpi(activos,'Activos','linear-gradient(135deg,var(--bl),var(--cy))')+kpi(finalizados,'Finalizados','linear-gradient(135deg,var(--gn),#34d399)')+kpi(nuevos,'Nuevos este Mes','linear-gradient(135deg,var(--am),var(--or))')+kpi(avgDias+'d','Prom. Días','linear-gradient(135deg,var(--pp),var(--pk))');
 
   // ── ROW1: Estado + Tipo ──
   var estData={};ESTADOS.forEach(e=>{estData[e]=ps.filter(p=>p.estado===e).length});var estSorted=ESTADOS.filter(e=>estData[e]>0).sort((a,b)=>estData[b]-estData[a]);var estMax=Math.max(...estSorted.map(e=>estData[e]),1);
@@ -311,6 +338,26 @@ function showM(id){
   document.getElementById('modalOv').className='modal-ov open';
 }
 function closeM(){document.getElementById('modalOv').className='modal-ov'}
+
+function openAM(type){
+  var cfg={
+    expired:{title:'Permisos Expirados',icon:'🚨',color:'var(--rd)',bg:'var(--rds)',data:window._alerts.expired},
+    expire:{title:'Próximos a Expirar (30 días)',icon:'⏰',color:'var(--or)',bg:'var(--ors)',data:window._alerts.expire},
+    stale:{title:'Aprobados sin Avance (+4 meses)',icon:'⚠️',color:'var(--am)',bg:'var(--ams)',data:window._alerts.stale}
+  }[type];
+  if(!cfg)return;
+  var items=cfg.data;
+  var html='<div class="amodal-h"><div class="amodal-h-left"><div class="amodal-h-icon">'+cfg.icon+'</div><div class="amodal-h-title">'+cfg.title+'</div><div class="amodal-h-count" style="background:'+cfg.bg+';color:'+cfg.color+'">'+items.length+'</div></div><button class="modal-x" onclick="closeAM()">✕</button></div>';
+  html+='<div class="amodal-b">';
+  if(!items.length){html+='<div class="amodal-empty">✅ No hay alertas de este tipo</div>'}
+  else{items.forEach(a=>{
+    html+='<div class="ai"><div class="ai-id" style="color:'+cfg.color+'">'+esc(a.id)+'</div><div class="ai-info"><div class="ai-desc">'+esc(a.desc)+'</div><div class="ai-sub">'+esc(a.addr)+(a.cliente?' — '+esc(a.cliente):'')+'</div></div><div class="ai-right"><div class="ai-days" style="color:'+cfg.color+'">'+a.days+'</div><div class="ai-unit">días</div></div></div>';
+  })}
+  html+='</div>';
+  document.getElementById('amodalC').innerHTML=html;
+  document.getElementById('amodalOv').className='amodal-ov open';
+}
+function closeAM(){document.getElementById('amodalOv').className='amodal-ov'}
 function kpi(v,l,g){return'<div class="kpi an" style="animation-delay:80ms"><div class="kpi-bar" style="background:'+g+'"></div><div class="kpi-v">'+v+'</div><div class="kpi-l">'+l+'</div></div>'}
 loadData();
 </script>
