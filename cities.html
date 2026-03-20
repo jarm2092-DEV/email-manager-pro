@@ -103,7 +103,6 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--tx);min-heig
 .dc-link{color:var(--ac2);text-decoration:none;font-size:11px;transition:color 0.15s;word-break:break-all}
 .dc-link:hover{color:var(--tx)}
 .dc-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;background:var(--sf);border:1px solid var(--bd);color:var(--tx2);margin:2px}
-.dc-user{background:var(--sf);border:1px solid var(--bd);padding:6px 10px;border-radius:6px;margin-bottom:4px;font-family:'JetBrains Mono',monospace;font-size:11px}
 .dc-empty{color:var(--mt);font-size:11px;font-style:italic}
 
 /* Table view */
@@ -125,6 +124,29 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--tx);min-heig
 .view-btn{padding:6px 12px;border:1px solid var(--bd);background:transparent;color:var(--tx2);border-radius:var(--rs);cursor:pointer;font-family:inherit;font-size:11px;font-weight:600;transition:all 0.15s}
 .view-btn:hover{background:var(--sf2);color:var(--tx)}
 .view-btn.on{border-color:var(--ac);background:rgba(124,92,252,0.1);color:var(--ac2)}
+
+/* Edit Modal */
+.emodal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:250;display:none;align-items:flex-start;justify-content:center;padding:40px 24px;overflow-y:auto}
+.emodal-ov.open{display:flex}
+.emodal{background:var(--bg2);border:1px solid var(--bd2);border-radius:var(--r);width:100%;max-width:640px;box-shadow:0 24px 64px rgba(0,0,0,0.6);animation:emIn 0.3s cubic-bezier(0.16,1,0.3,1)}
+@keyframes emIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+.emodal-h{padding:18px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)}
+.emodal-h-t{font-size:16px;font-weight:800}
+.emodal-x{width:32px;height:32px;border:1px solid var(--bd);background:var(--sf2);color:var(--tx2);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all 0.2s}
+.emodal-x:hover{background:var(--rds);color:var(--rd)}
+.emodal-b{padding:20px 24px;max-height:70vh;overflow-y:auto}
+.emodal-row{margin-bottom:14px}
+.emodal-lbl{font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px}
+.emodal-input{width:100%;padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;color:var(--tx);font-family:inherit;font-size:12px;transition:border-color 0.2s}
+.emodal-input:focus{outline:none;border-color:var(--ac)}
+.emodal-textarea{width:100%;padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;color:var(--tx);font-family:inherit;font-size:11px;min-height:60px;resize:vertical;transition:border-color 0.2s}
+.emodal-textarea:focus{outline:none;border-color:var(--ac)}
+.emodal-hint{font-size:9px;color:var(--mt);margin-top:2px}
+.emodal-foot{padding:16px 24px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px}
+.emodal-save{padding:9px 24px;background:var(--ac);color:white;border:none;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:opacity 0.2s}
+.emodal-save:hover{opacity:0.85}
+.emodal-save:disabled{opacity:0.4;cursor:wait}
+.emodal-cancel{padding:9px 18px;background:transparent;color:var(--tx2);border:1px solid var(--bd);border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
 
 @media(max-width:1000px){.city-sidebar{display:none}.sidebar{width:var(--sc)}.c .sb-brand,.sb-brand,.sb-sec,.sb-link .sb-t,.sb-ft,.sb-tog .sb-tog-text{opacity:0;width:0}.sb-link{justify-content:center;padding:9px}.sb-tog button{justify-content:center}.main{margin-left:var(--sc)}.dc-body{grid-template-columns:1fr}}
 @media(max-width:600px){.topbar{padding:16px}.filters-row{padding:12px 16px}.detail-panel{padding:16px}.table-view{padding:12px}}
@@ -154,10 +176,12 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--tx);min-heig
     <div class="topbar-t">Building <em>Departments</em></div>
     <div class="topbar-right">
       <span class="counter-badge" id="counterBadge"></span>
+      <button class="topbar-btn" onclick="openEditModal(null)" style="background:var(--ac);color:white;border-color:transparent">+ Nueva Ciudad</button>
       <div style="display:flex;gap:4px">
         <button class="view-btn on" id="vTable" onclick="setView('table')">📋 Tabla</button>
         <button class="view-btn" id="vDetail" onclick="setView('detail')">🏛️ Detalle</button>
       </div>
+      <button class="topbar-btn" onclick="loadFromSP()">↻ Actualizar</button>
     </div>
   </div>
 
@@ -168,8 +192,14 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--tx);min-heig
     <button class="fb" onclick="clearF()" style="color:var(--rd);border-color:rgba(239,68,68,0.3);margin-left:auto">✕ Limpiar</button>
   </div>
 
-  <div class="content-area" id="contentArea">
-    <!-- Rendered by JS -->
+  <div class="content-area" id="contentArea"></div>
+</div>
+
+<div class="emodal-ov" id="editOv" onclick="if(event.target===this)closeEdit()">
+  <div class="emodal">
+    <div class="emodal-h"><div class="emodal-h-t" id="editTitle">Nueva Ciudad</div><button class="emodal-x" onclick="closeEdit()">✕</button></div>
+    <div class="emodal-b" id="editBody"></div>
+    <div class="emodal-foot"><button class="emodal-cancel" onclick="closeEdit()">Cancelar</button><button class="emodal-save" id="editSave" onclick="saveCity()">💾 Guardar</button></div>
   </div>
 </div>
 
@@ -177,1036 +207,52 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--tx);min-heig
 function togSB(){var s=document.getElementById('sb');s.classList.toggle('c');document.getElementById('sbArr').textContent=s.classList.contains('c')?'▶':'◀';localStorage.setItem('sb_c',s.classList.contains('c')?'1':'0')}
 if(localStorage.getItem('sb_c')==='1'){document.getElementById('sb').classList.add('c');document.getElementById('sbArr').textContent='▶'}
 
-const RAW = [
-  {
-    city: "Palm Beach",
-    county: "PALM BEACH",
-    dept: "Town of Palm Beach Building Division",
-    address: "360 South County Road, Palm Beach, FL 33480",
-    emails: [{label:"Building Division", email:"(llamar)"}],
-    phones: [{label:"Building Division", phone:"+1 (561) 838-5431"}],
-    contractors: ["EXCLUSIVE WINDOWS AND DOORS CORP"],
-    users: [{user:"mmartin@exclusivewindoors.com", pass:"Xfinity2024@"}],
-    links: [],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Tamarac",
-    county: "BROWARD",
-    dept: "City of Tamarac",
-    address: "6011 Nob Hi Rd, Suite 1, Tamarac, FL 33321",
-    emails: [{label:"Contractor",email:"contractor@tamarac.org"},{label:"Permit",email:"permit@tamarac.org"}],
-    phones: [{label:"Building",phone:"+1 (954) 597-3420"},{label:"Inspections",phone:"+1 (954) 597-3454"}],
-    contractors: ["GREENLINE REMODELING INC","STORMWISE HURRICANE PROTECTION LLC","APC ENGINEERING ENTERPRISES INC.","AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [{user:"permits@laywindoor.com", pass:"Xfinity2024"}],
-    links: [{label:"IBuild",url:"https://e-gov.tamarac.org/Click2GovBP/index.html"},{label:"ProjectDox",url:"https://eplan.tamarac.org/ProjectDox/"},{label:"Inspector Route",url:"https://www.tamarac.org/1293/Permit-Inspection-Times"}],
-    inspections: "",
-    notes: "",
-    docs: ["PAP","NOC","AFFIT-TAMARAC-WD"]
-  },
-  {
-    city: "Sweetwater",
-    county: "MIAMI DADE",
-    dept: "City of Sweetwater Building Department",
-    address: "1701 NW 112 Ave #102, Sweetwater, FL 33172",
-    emails: [{label:"Building",email:"pwsubmittals@cityofsweetwater.fl.gov"},{label:"Inspections",email:"inspections@cityofsweetwater.fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 485-4526"}],
-    contractors: ["STORMWISE HURRICANE PROTECTION LLC"],
-    users: [{user:"submittals@cityofsweetwater.fl.gov (email)",pass:"(enviar por email)"}],
-    links: [{label:"Building Dept",url:"https://cityofsweetwater.fl.gov/permit-procedures/"},{label:"IBuild",url:"https://cityofsweetwateresuite.miami/eSuite.Permits/WelcomePage.aspx"}],
-    inspections: "Agendar por email: inspections@cityofsweetwater.fl.gov",
-    notes: "Permisos se someten por email",
-    docs: []
-  },
-  {
-    city: "Surfside",
-    county: "MIAMI DADE",
-    dept: "Surfside Building Department",
-    address: "9293 Harding Avenue, Surfside, FL 33154",
-    emails: [{label:"Contractor Registration",email:"buildingapp@townofsurfsidefl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 861-4863"}],
-    contractors: ["IGD & CONSTRUCTION (SCC)"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.townofsurfsidefl.gov/departments-services/building"},{label:"IBuild",url:"https://surfsidefl-energovpub.tylerhost.net/apps/selfservice#/dashboard"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Sunrise",
-    county: "BROWARD",
-    dept: "Sunrise Building Division",
-    address: "10770 W Oakland Park Blvd, Sunrise, FL 33351",
-    emails: [{label:"Permits / NOC",email:"permits@sunrisefl.gov"}],
-    phones: [{label:"Inspection Schedule",phone:"+1 (954) 572-2380"},{label:"Structural Insp. Route 8-8:30am",phone:"+1 (954) 572-2379"},{label:"Building Dept",phone:"+1 (954) 572-2354"},{label:"Jose - Reviewer",phone:"+1 (954) 572-2379"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC","CONSTRUCTORA VIANPE INC","GREENLINE REMODELING INC","AUTANA ENTERPRISES INC","B4 CONSULTING INC","MKT DEVELOMENT INC"],
-    users: [{user:"laywindoor",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.sunrisefl.gov/departments-services/community-development/building"},{label:"IBuild",url:"https://energov.sunrisefl.gov/EnerGov_Prod/SelfService/SunriseFL%20Prod#/search?m=2&ps=10&pn=1&em=true&st"}],
-    inspections: "",
-    notes: "Para someter el permiso no se necesita firma del dueño, solo del contratista.",
-    docs: []
-  },
-  {
-    city: "Sunny Isles Beach",
-    county: "MIAMI DADE",
-    dept: "City of Sunny Isles Beach Building Department",
-    address: "18070 Collins Ave, Sunny Isles Beach, FL 33160",
-    emails: [{label:"Building",email:"info.building@sibfl.net"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 947-2150"}],
-    contractors: ["AUTANA ENTERPRISES INC","SANTIAN CONSTRUCTION GROUP LLC","REGOSA ENGINEERING SERVICES, INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.sibfl.net/building-dept/"},{label:"IBuild",url:"https://ci-sunnyislesbeach-fl.smartgovcommunity.com/ApplicationPublic/ApplicationHome"},{label:"Schedule Inspection",url:"https://ci-sunnyislesbeach-fl.smartgovcommunity.com/ApplicationPublic/ApplicationInspectionSchedule"},{label:"Inspector Route",url:"https://ci-sunnyislesbeach-fl.smartgovcommunity.com/ApplicationPublic/ApplicationInspectionSchedule"}],
-    inspections: "Lun–Vie: 7:30am–3:30pm",
-    notes: "En el step Permit Approval Steps hay un link para el reporte de comentarios actuales",
-    docs: []
-  },
-  {
-    city: "Port Charlotte",
-    county: "CHARLOTTE",
-    dept: "Charlotte County Building Construction Division",
-    address: "18400 Murdock Circle, Port Charlotte, FL 33948",
-    emails: [{label:"Insurance Docs",email:"contractorlicensing@charlottecountyfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (941) 743-1201"}],
-    contractors: [],
-    users: [],
-    links: [{label:"IBuild",url:"https://aca-prod.accela.com/BOCC/Default.aspx?culture=en-US"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Pompano Beach",
-    county: "BROWARD",
-    dept: "City of Pompano Beach Building Department",
-    address: "100 W Atlantic Boulevard, Pompano Beach, FL 33061",
-    emails: [{label:"Contractor (via portal)",email:"businesstaxreceipt@copbfl.com"}],
-    phones: [{label:"Main Customer",phone:"+1 (954) 786-4669"},{label:"Contractor",phone:"+1 (954) 786-4633"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC","INFINITY AT YOUR SERVICE LLC","GREENLINE REMODELING INC"],
-    users: [{user:"luisdesignwindows@gmail.com (ProjectDox)",pass:"Windows12345"},{user:"permits@laywindoor.com",pass:"Xfinity2024"}],
-    links: [{label:"Building Dept",url:"https://www.pompanobeachfl.gov/government/building-inspections"},{label:"IBuild",url:"https://c2g.pompanobeachfl.gov/Click2GovBP/selectpermit.html"},{label:"ProjectDox",url:"https://epr.pompanobeachfl.gov/Portal/Login/Index/City-of-Pompano-Beach"},{label:"Schedule Inspection",url:"https://c2g.pompanobeachfl.gov/Click2GovBP/selectpermit.html"},{label:"Inspector Route",url:"https://wimi.pompanobeachfl.gov/"}],
-    inspections: "",
-    notes: "City Hall: Lun–Jue 7am–6pm. Para revisión: escribir a damaris.suban@copbfl.com",
-    docs: ["PAP","NOC","FLASHING & BUCK AFF"]
-  },
-  {
-    city: "Plantation",
-    county: "BROWARD",
-    dept: "City of Plantation Building Department",
-    address: "401 NW 70th Ter 1st Floor, Plantation, FL 33317",
-    emails: [{label:"Building Dept",email:"helpmebuilding@plantation.org"}],
-    phones: [{label:"Building Dept",phone:"+1 (954) 797-2250"},{label:"Inspection Line",phone:"+1 (954) 678-2632"},{label:"Contractor Reg. Fax",phone:"+1 (954) 797-2270"},{label:"Plan Review Fax",phone:"+1 (954) 797-2273"}],
-    contractors: ["GREENLINE REMODELING INC","MEGA BUILDERS CORP","UPGRADE GENERAL CONTRACTORS, INC","DESCON GROUP INC","SUNSHINE ELECTRICAL CONTRACTORS CORP"],
-    users: [{user:"designwindows",pass:"Windows12345"}],
-    links: [{label:"Building Dept",url:"https://www.plantation.org/government/departments/building-development/permits"},{label:"IBuild",url:"https://aca.plantation.org/CitizenAccess/Cap/CapHome.aspx?module=Building&TabName=Building"},{label:"Schedule Inspection",url:"https://aca.plantation.org/CitizenAccess/Login.aspx?ReturnUrl=%2fCitizenAccess%2fCap%2fCapHome.aspx"},{label:"Inspector Route",url:"https://aca.plantation.org/CitizenAccess/default.aspx"}],
-    inspections: "",
-    notes: "Horas: 8:00am–3:30pm Lun–Vie. Enviar NOC antes de inspección a helpmebuilding@plantation.org",
-    docs: []
-  },
-  {
-    city: "Pinecrest",
-    county: "MIAMI DADE",
-    dept: "Pinecrest Building & Planning",
-    address: "12645 Pinecrest Pkwy, Pinecrest, FL 33156",
-    emails: [{label:"Contractor",email:"renews@pinecrest-fl.gov"},{label:"Building",email:"building@pinecrest-fl.gov"},{label:"Contractor Reg.",email:"renewals@pinecrest-fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 234-2121"}],
-    contractors: ["B4 CONSULTING INC"],
-    users: [{user:"por contratista B4 Consulting",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://pine-trk.aspgov.com/eTRAKiT/"}],
-    inspections: "",
-    notes: "",
-    docs: ["PAP","OWNER BUILDER","NOC","WINDOOR"]
-  },
-  {
-    city: "Pembroke Pines",
-    county: "BROWARD",
-    dept: "Pembroke Pines Building Department",
-    address: "601 City Ctr Way, Pembroke Pines, FL 33025",
-    emails: [{label:"Send NOC",email:"pinespermits@cgasolutions.com"},{label:"Howard Duncanson",email:"hduncanson@cgasolutions.com"},{label:"Baker",email:"bbaker@cgasolutions.com"}],
-    phones: [{label:"Building Dept",phone:"+1 (954) 435-6502"},{label:"Jose Porta (Reviewer)",phone:"+1 (561) 938-4691"},{label:"Insp. Howard Duncanson",phone:"+1 (786) 831-4555"},{label:"Yunior",phone:"+1 (954) 391-1256"}],
-    contractors: ["AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC","LATORRE CONSTRUCTION LLC","B4 CONSULTING INC","CONSTRUCTORA VIANPE INC","STORMWISE HURRICANE PROTECTION LLC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://pembrokepinesfl-energovweb.tylerhost.net/apps/selfservice#/home"},{label:"Schedule Inspection",url:"https://pembrokepinesfl-energovweb.tylerhost.net/apps/selfservice#/myWork?tab=MyPermits&groupIndex=2"},{label:"Inspector Route",url:"https://pembrokepinesfl-energovweb.tylerhost.net/apps/selfservice#/inspection/todaysinspections"}],
-    inspections: "",
-    notes: "Horas: Lun–Jue 7:30am–5:00pm. Poner número de openings en job description. Enviar docs a pinespermits@cgasolutions.com y llamar al 954-435-6502 para emisión.",
-    docs: ["HOA-AFF","PAP","INSPECTIONS PROCEDURE FORM","NOC"]
-  },
-  {
-    city: "Palmetto Bay",
-    county: "MIAMI DADE",
-    dept: "Village of Palmetto Bay Building Dept",
-    address: "9705 East Hibiscus Street, Palmetto Bay, FL 33157",
-    emails: [{label:"Building",email:"permits@palmettobay-fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 259-1250"}],
-    contractors: ["AUTANA ENTERPRISES INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.palmettobay-fl.gov/549/Community-Economic-Development"},{label:"IBuild",url:"https://app.govoutreach.com/palmettobayvillagefl/public/permits/list"},{label:"ProjectDox",url:"https://eden.palmettobay-fl.gov/EdenWebNet/Default.aspx?Build=SY.ServicesHome"},{label:"Schedule Inspection",url:"https://www.palmettobay-fl.gov/1227/Online-Appointments-All-Departments"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Southwest Ranches",
-    county: "BROWARD",
-    dept: "Zoning and Permitting Town of Southwest Ranches",
-    address: "13400 Griffin Rd, Southwest Ranches, FL 33330",
-    emails: [{label:"Inspections",email:"swrinspections@southwestranches.org"}],
-    phones: [{label:"Inspection / Building",phone:"+1 (954) 434-0008"}],
-    contractors: [],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.southwestranches.org/departments/building-permitting-and-inspections/"},{label:"IBuild",url:"https://www2.citizenserve.com/Portal/?installationid=117"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Palm Springs",
-    county: "PALM BEACH",
-    dept: "Village of Palm Springs",
-    address: "(no dirección física registrada)",
-    emails: [{label:"PZB Director",email:"icabrera@vpsfl.org"}],
-    phones: [{label:"Contractors App",phone:"+1 (561) 584-8200"},{label:"Building Dept",phone:"+1 (561) 965-4010"}],
-    contractors: ["AUTANA ENTERPRISES INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.vpsfl.org/286/Planning-Zoning-Building"},{label:"IBuild",url:"https://h9.maintstar.co/palmsprings/portal/#/"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "West Palm Beach",
-    county: "PALM BEACH",
-    dept: "Palm Beach County Contractors Certification Division",
-    address: "2300 N. Jog Rd, Ste. 2W-61, West Palm Beach, FL 33411",
-    emails: [{label:"Building Division",email:"pzbccert@pbc.gov"},{label:"Inspecciones",email:"PZB-Insp@pbc.gov"}],
-    phones: [{label:"Building",phone:"+1 (561) 233-5000"}],
-    contractors: ["H2H CONTRACTING LLC","STORMWISE HURRICANE PROTECTION LLC","LATORRE CONSTRUCTION LLC","UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [{user:"permits.upgradegc@gmail.com",pass:"Halo123456@"},{user:"mtc0006@hotmail.com",pass:"MtcMonday11"},{user:"ingluislares@yahoo.com",pass:"Westpalmbeach@2025"},{user:"clinton@h2hcontracting.com",pass:"Mikeray1"}],
-    links: [{label:"IBuild",url:"https://www.pbcgov.org/ePZB.Admin.WebSPA/#/"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Opa Locka",
-    county: "MIAMI DADE",
-    dept: "City of Opa Locka Building Division",
-    address: "780 Fisherman St, Opa Locka, FL 33054",
-    emails: [],
-    phones: [{label:"Licensing Ext 1403-04",phone:"+1 (305) 953-2868"},{label:"Building",phone:"+1 (305) 953-2828"}],
-    contractors: ["GREENLINE REMODELING INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.opalockafl.gov/73/Building-Licenses"}],
-    inspections: "1-Rough · 2-Screws · 3-Final",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Oakland Park",
-    county: "BROWARD",
-    dept: "City of Oakland Park",
-    address: "5399 N Dixie Highway #3, Oakland Park, FL 33334",
-    emails: [{label:"Building",email:"building@oaklandparkfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (954) 630-4350"}],
-    contractors: ["FRANCAR ELECTRICAL CORPORATION","SUNSHINE ELECTRICAL CONTRACTORS CORP","STORMWISE HURRICANE PROTECTION LLC","LATORRE CONSTRUCTION LLC","INFINITY AT YOUR SERVICE LLC"],
-    users: [{user:"DESIGNWINDOWS",pass:"Windows12345*"},{user:"permits@laywindoor.com",pass:"Xfinity2024@"},{user:"luisdesignwindows@gmail.com",pass:"Windows12345*"}],
-    links: [{label:"Building Dept",url:"https://www.oaklandparkfl.gov/312/Permit-Access"},{label:"IBuild",url:"https://oaklandparkfl-energovweb.tylerhost.net/apps/SelfService#/home"}],
-    inspections: "",
-    notes: "",
-    docs: ["PAP","NOC","CONTRACTOR REGISTRATION FORM"]
-  },
-  {
-    city: "North Miami Beach",
-    county: "MIAMI DADE",
-    dept: "North Miami Beach Building Department",
-    address: "17050 NE 19 Ave, North Miami Beach, FL 33162",
-    emails: [{label:"Building",email:"nmbbldg@citynmb.com"}],
-    phones: [{label:"Building",phone:"+1 (305) 948-2965"}],
-    contractors: ["STORMWISE HURRICANE PROTECTION LLC"],
-    users: [{user:"charlie.garcia",pass:"(no registrado)"}],
-    links: [{label:"Building Dept",url:"https://www.northmiamifl.gov/155/Building"},{label:"IBuild",url:"https://css.northmiamibeachfl.gov/"}],
-    inspections: "",
-    notes: "",
-    docs: ["CONTRACTOR REGISTRATION FORM","NOC","PA"]
-  },
-  {
-    city: "North Miami",
-    county: "MIAMI DADE",
-    dept: "Building Department City of North Miami",
-    address: "12340 NE 8th Avenue, North Miami, FL 33161",
-    emails: [{label:"Permit Inquiries",email:"onlinepermits@northmiamifl.gov"},{label:"Permit Submittal",email:"permits@northmiamifl.gov"},{label:"Inspections",email:"inspect@northmiamifl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 895-9820"}],
-    contractors: ["AUTANA ENTERPRISES INC","B4 CONSULTING INC"],
-    users: [{user:"LAYWINDOOR",pass:"Infinity2024"}],
-    links: [{label:"Building Dept",url:"https://www.northmiamifl.gov/155/Building"},{label:"IBuild",url:"https://eportal.northmiamifl.gov/Default.aspx?Build=PM.PermitsHome&ClearErrors=Y"},{label:"Schedule Inspection",url:"https://www.northmiamifl.gov/FormCenter/Building-15/Request-for-Inspection-122"},{label:"Inspector Route",url:"https://www.northmiamifl.gov/992/Inspections"}],
-    inspections: "Email: Inspect@northmiamifl.gov · Incluir: Nro. permiso, dirección, tipo y contacto",
-    notes: "1-Someter por email con paquete de licencia · 2-Cuando aprobado, enviar certificados · 3-Ellos mandan invoice · 4-Notificar pago",
-    docs: ["NOC","PAP","COST AFF","OWNER BUILDER AFF"]
-  },
-  {
-    city: "North Lauderdale",
-    county: "BROWARD",
-    dept: "North Lauderdale Zoning Department",
-    address: "701 SW 71st Ave, North Lauderdale, FL 33068",
-    emails: [{label:"Building",email:"css@nlauderdale.org"}],
-    phones: [{label:"Building Dept",phone:"+1 (954) 724-7069"}],
-    contractors: ["SUNSHINE ELECTRICAL CONTRACTORS CORP","INFINITY AT YOUR SERVICE LLC","LATORRE CONSTRUCTION LLC","BRIO CONSTRUCTION LLC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.nlauderdale.org/departments/community_development/permitting.php"},{label:"IBuild",url:"https://nlselfservice.nlauderdale.org/Energov_prod/SelfService#/home"}],
-    inspections: "",
-    notes: "Horas: Lun–Jue 7am–6pm",
-    docs: []
-  },
-  {
-    city: "Miramar",
-    county: "BROWARD",
-    dept: "Building, Planning & Zoning Department",
-    address: "2200 Civic Center Place, Miramar, FL 33025",
-    emails: [{label:"Contractor Updates",email:"contractorupdates@miramarfl.gov"},{label:"Building",email:"buildingpermitclerks@miramarfl.gov"}],
-    phones: [{label:"Building Ext 1",phone:"+1 (954) 602-3200"}],
-    contractors: ["INFINITY AT YOUR SERVICE LLC","AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC","EXCLUSIVE WINDOWS AND DOORS CORP","STORMWISE HURRICANE PROTECTION LLC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.miramarfl.gov"},{label:"IBuild",url:"https://mss.miramarfl.gov/css/citizens/PermitsInspections/ApplicationInformation.aspx"},{label:"Inspector Route",url:"https://www.miramarfl.gov/Departments/Building-Planning-Zoning/Building-Permits-Inspections/Daily-Inspections"}],
-    inspections: "INSPECCIONES QUIEREN TODO CERRADO. SOLO LLAMAR A LA FINAL CON FOTOS",
-    notes: "Walk-thru: Martes 7:00am–11:00am",
-    docs: []
-  },
-  {
-    city: "Miami Dade County",
-    county: "MIAMI DADE",
-    dept: "Miami Dade County Building Department",
-    address: "11805 SW 26 St #207, Miami, FL 33175",
-    emails: [{label:"Building",email:"bldgdept@miamidade.gov"},{label:"Contractor License",email:"rer-clic@miamidade.gov"},{label:"Contractor Update",email:"karenjackson@miamidade.gov"},{label:"Contractor Reg.",email:"contractorlicensing@miamidade.gov"},{label:"Melinda - Cont. Update",email:"mt045@miamidade.gov"}],
-    phones: [{label:"Inspection Request",phone:"+1 (305) 591-7966"},{label:"Building",phone:"+1 (786) 315-2100"},{label:"Contractor Licensing",phone:"+1 (786) 315-2880"},{label:"Violations",phone:"+1 (786) 315-2424"},{label:"Microfilm",phone:"+1 (786) 315-2340"},{label:"Enforcement",phone:"+1 (786) 315-2424"}],
-    contractors: ["B4 CONSULTING INC","NEW ROOFING & GC LLC","CONSTRUCTORA VIANPE INC","SANTIAN CONSTRUCTION GROUP LLC","RETOS SERVICE PLUS LLC","WAICH LLC","STORMWISE HURRICANE PROTECTION LLC","APC ENGINEERING ENTERPRISES INC.","EXCLUSIVE WINDOWS AND DOORS CORP","SAP WINDOW AND DOOR SERVICES LLC","AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://www.miamidade.gov/Apps/RER/EPSPortal"},{label:"ProjectDox",url:"https://wwwx.miamidade.gov/Apps/RER/ePermittingMenu/Home/Permits"},{label:"Schedule Inspection",url:"https://www.miamidade.gov/building/inspections.asp"},{label:"Inspector Route",url:"https://www.miamidade.gov/Apps/RER/Mobile3/Home/PermitRoutes"}],
-    inspections: "Horas: 7:30am–4:00pm Lun–Vie. Códigos de inspección: 001-Final, 007-Framing/Windows, 102-Buck and Fastener, etc.",
-    notes: "P=Permit Pulled · F=Permit Finalized · sin letra=no emitido",
-    docs: []
-  },
-  {
-    city: "Miami Springs",
-    county: "MIAMI DADE",
-    dept: "Building Department City of Miami Springs",
-    address: "201 Westward Drive, Miami Springs, FL 33166",
-    emails: [{label:"Building",email:"bzcp@miamisprings-fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 805-5030"},{label:"Building 2",phone:"+1 (305) 805-5036"}],
-    contractors: ["B4 CONSULTING INC","AUTANA ENTERPRISES INC"],
-    users: [{user:"laywindoor",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.miamisprings-fl.gov/building"},{label:"IBuild",url:"https://mias-trk.aspgov.com/etrakit/"},{label:"Inspector Route",url:"https://mias-trk.aspgov.com/etrakit/ExistingInspections.aspx"}],
-    inspections: "",
-    notes: "Permiso se somete en persona",
-    docs: []
-  },
-  {
-    city: "Miami Lakes",
-    county: "MIAMI DADE",
-    dept: "Town of Miami Lakes Building Department",
-    address: "6601 Main St, Miami Lakes, FL 33014",
-    emails: [{label:"Contractor",email:"contractorupdate@miamilakes-fl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 827-4015"},{label:"Ricky Aller - Inspector",phone:"+1 (305) 458-2573"}],
-    contractors: ["B4 CONSULTING INC","UPGRADE GENERAL CONTRACTORS, INC","AUTANA ENTERPRISES INC","STORMWISE HURRICANE PROTECTION LLC","GREENLINE REMODELING INC","APC ENGINEERING ENTERPRISES INC."],
-    users: [],
-    links: [{label:"IBuild",url:"https://trakit.miamilakes-fl.gov/etrakit/Search/permit.aspx"},{label:"Schedule Inspection",url:"https://web.nextmeapp.com/self-check-in/97cc853b-76d2-41fb-bbd8-94cec41d2252"},{label:"Inspector Route",url:"https://trakit.miamilakes-fl.gov/etrakit//ExistingInspections.aspx"}],
-    inspections: "Inspección in progress",
-    notes: "No tenemos login",
-    docs: []
-  },
-  {
-    city: "Miami Gardens",
-    county: "MIAMI DADE",
-    dept: "City of Miami Gardens Building Services",
-    address: "18605 NW 27 Ave, Miami Gardens, FL 33056",
-    emails: [{label:"Building",email:"buildingpermitquestions@miamigardens-fl.gov"},{label:"Permit Review Coord.",email:"ritaylor@miamigardens-fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 622-8027"}],
-    contractors: ["STORMWISE HURRICANE PROTECTION LLC","AUTANA ENTERPRISES INC","GREENLINE REMODELING INC"],
-    users: [{user:"DESIGN WINDOWS",pass:"Windows12345"}],
-    links: [{label:"IBuild",url:"https://miamigardensfl-energovpub.tylerhost.net/apps/selfservice#/home"},{label:"Schedule Inspection",url:"https://miamigardensfl-energovpub.tylerhost.net/Apps/selfservice/MiamiGardensFLProd#/myWork?tab=RequestInspections"},{label:"Inspector Route",url:"https://miamigardensfl-energovpub.tylerhost.net/Apps/selfservice/MiamiGardensFLProd#/inspection/todaysinspections"}],
-    inspections: "",
-    notes: "Horas: Lun–Jue 7:00am–7:00pm",
-    docs: []
-  },
-  {
-    city: "Miami Beach",
-    county: "MIAMI DADE",
-    dept: "City of Miami Beach Building Department",
-    address: "1700 Convention Center Drive 2nd Floor, Miami Beach, FL 33139",
-    emails: [{label:"Inspections",email:"buildinginspection@miamibeachfl.gov"},{label:"Contractor Reg.",email:"buildingcontractor@miamibeachfl.gov"},{label:"Building Questions",email:"buildinginfo@miamibeachfl.gov"},{label:"Violations",email:"buildingviolations@miamibeachfl.gov"},{label:"James Bartell - Chief Insp.",email:"jamesbartell@miamibeachfl.gov"}],
-    phones: [{label:"Judith - Supervisor",phone:"+1 (305) 673-7610 ext26456"},{label:"Rashonda - Manager",phone:"+1 (305) 673-7610 ext26621"},{label:"Nisca Cesar",phone:"+1 (305) 673-7610 ext24101"},{label:"Building",phone:"+1 (305) 673-7610"},{label:"Planning",phone:"+1 (305) 673-7550"},{label:"James Bartell",phone:"+1 (786) 920-5435"},{label:"Fire Inspections",phone:"+1 (305) 673-7123"},{label:"Tom Armstrong (Fire)",phone:"+1 (786) 402-4945"}],
-    contractors: ["SANTIAN CONSTRUCTION GROUP LLC","IGD & CONSTRUCTION (SCC)","AUTANA ENTERPRISES INC","A1 RENOVATION LLC","KOLVET GROUP LLC","ALL AMERICA CONSTRUCTION SERVICES","EXCLUSIVE WINDOWS AND DOORS CORP","B4 CONSULTING INC"],
-    users: [{user:"luisdesignwindows@gmail.com",pass:"Windows12345*"}],
-    links: [{label:"Building Dept",url:"https://www.miamibeachfl.gov/city-hall/building/"},{label:"IBuild",url:"https://energovcss.miamibeachfl.gov/energovprod/selfservice#/myWork?tab=MyPermits&groupIndex=5"},{label:"Schedule Inspection",url:"https://energovcss.miamibeachfl.gov/energovprod/selfservice#/myWork?tab=MyPermits&groupIndex=5"},{label:"Inspector Route",url:"https://apps.miamibeachfl.gov/inspectionroutes"}],
-    inspections: "",
-    notes: "Horas: Lun–Vie 8am–4pm. Cambio de ingeniero: enviar a AdalbertoViciedo@miamibeachfl.gov",
-    docs: []
-  },
-  {
-    city: "Brevard County",
-    county: "BREVARD",
-    dept: "Brevard County Building Department",
-    address: "(no dirección física registrada)",
-    emails: [{label:"Permit Submittal (OLD)",email:"inspectmail@brevardfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (321) 608-7915"}],
-    contractors: [],
-    users: [],
-    links: [{label:"IBuild",url:"https://energovweb23.mlbfl.org/energov_prod/selfservice/#/search"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Medley",
-    county: "MIAMI DADE",
-    dept: "Town of Medley Building Department",
-    address: "7777 NW 72nd Ave, Medley, FL 33166",
-    emails: [{label:"Submit Permit",email:"building@townofmedley.com"}],
-    phones: [],
-    contractors: [],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.townofmedley.com/building-and-zoning-department"}],
-    inspections: "",
-    notes: "No tiene portal online de permiso. Submit permit al email.",
-    docs: []
-  },
-  {
-    city: "Margate",
-    county: "BROWARD",
-    dept: "Margate City Building Department",
-    address: "901 NW 66th Ave B, Margate, FL 33063",
-    emails: [{label:"Building",email:"building@margatefl.com"}],
-    phones: [{label:"Building",phone:"+1 (954) 970-3004"}],
-    contractors: ["GREENLINE REMODELING INC","STORMWISE HURRICANE PROTECTION LLC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity20"}],
-    links: [{label:"Building Dept",url:"https://www.margatefl.com/396/Forms"},{label:"IBuild",url:"https://marg-egov.aspgov.com/Click2GovBP/index.html"},{label:"ProjectDox",url:"https://margate-fl-us.avolvecloud.com/"},{label:"Schedule Inspection",url:"https://inspections.margatefl.com/"}],
-    inspections: "",
-    notes: "Al someter hay que pagar city fee inicial antes de que comience la revisión",
-    docs: []
-  },
-  {
-    city: "South Miami",
-    county: "MIAMI DADE",
-    dept: "South Miami City Hall",
-    address: "6130 Sunset Drive, South Miami, FL 33143",
-    emails: [{label:"Building",email:"building@southmiamifl.gov"},{label:"City Clerk",email:"npayne@southmiamifl.gov"}],
-    phones: [{label:"Check Permit Status",phone:"+1 (305) 663-6355"},{label:"City Clerk",phone:"+1 (305) 663-6340"}],
-    contractors: ["AUTANA ENTERPRISES INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.southmiamifl.gov/115/Building-Department"},{label:"IBuild",url:"https://etrakit.southmiamifl.gov/etrakit/"},{label:"Schedule Inspection",url:"https://etrakit.southmiamifl.gov/etrakit/dashboard.aspx"},{label:"Inspector Route",url:"https://etrakit.southmiamifl.gov/etrakit/Search/permit.aspx"}],
-    inspections: "Llamar al 305-663-6355 antes de 3:45pm para inspección al día siguiente.",
-    notes: "Permit Submit in Person. Para reemplazos solo requiere inspección final con fotos.",
-    docs: ["PAP","NOC","OWNER-BUILDER","SPECIAL-INSPECTOR"]
-  },
-  {
-    city: "Marco Island",
-    county: "COLLIER",
-    dept: "City of Marco Island Bldg Services",
-    address: "1310 San Marco Rd Suite A, Marco Island, FL 34145",
-    emails: [{label:"Permit Desk",email:"permitdesk@cityofmarcoisland.com"}],
-    phones: [{label:"Building",phone:"+1 (239) 389-5059"}],
-    contractors: ["EXCLUSIVE WINDOWS AND DOORS CORP"],
-    users: [],
-    links: [],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Loxahatchee",
-    county: "PALM BEACH",
-    dept: "Loxahatchee Groves Building Department",
-    address: "155 F Rd, Loxahatchee, FL 33470",
-    emails: [{label:"Permits / Inspecciones",email:"permits@loxahatcheegrovesfl.gov"},{label:"Communications",email:"communications@loxahatcheegrovesfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (561) 793-2418"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.loxahatcheegrovesfl.gov/"},{label:"IBuild",url:"https://apps.gov-easy.com/Home/ProjectStatus/Dashboard"}],
-    inspections: "Inspecciones: Lunes, Miércoles y Viernes",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Lighthouse Point",
-    county: "BROWARD",
-    dept: "Lighthouse Point Building Department",
-    address: "3701 NE 22nd Ave, Lighthouse Point, FL 33064",
-    emails: [{label:"Contractor Reg.",email:"lhpbuilding@lighthousepoint.com"}],
-    phones: [],
-    contractors: ["AUTANA ENTERPRISES INC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024*"}],
-    links: [{label:"IBuild",url:"https://ci-lighthousepoint-fl.smartgovcommunity.com/Public/Home?_conv=1"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Lauderhill",
-    county: "BROWARD",
-    dept: "City of Lauderhill Building Department",
-    address: "(no dirección física registrada)",
-    emails: [{label:"Tiffany Johnson",email:"tijohnson@lauderhill-fl.gov"},{label:"Submit Permits",email:"Customer_service@lauderhill-fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (954) 730-3030"}],
-    contractors: [],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.lauderhill-fl.gov/departments/building-department"},{label:"IBuild",url:"http://egov.lauderhill-fl.gov/eGovPlus83/permit/perm_status.aspx"}],
-    inspections: "",
-    notes: "Horas: Lun–Jue 7:30am–6:00pm",
-    docs: []
-  },
-  {
-    city: "Lauderdale Lakes",
-    county: "BROWARD",
-    dept: "City of Lauderdale Lakes",
-    address: "4300 NW 36 Street, Lauderdale Lakes, FL 33319",
-    emails: [{label:"Building",email:"permits@lauderdalelakes.org"}],
-    phones: [{label:"Building",phone:"+1 (954) 535-2480"},{label:"Insp. Junior Malcolm",phone:"+1 (954) 391-1256"}],
-    contractors: ["GREENLINE REMODELING INC","STORMWISE HURRICANE PROTECTION LLC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.lauderdalelakes.org/250/The-Permitting-Process"},{label:"IBuild",url:"https://selfservice.lauderdalelakes.org/css/citizens/PermitsInspections/Default.aspx"},{label:"Schedule Inspection",url:"https://selfservice.lauderdalelakes.org/css/citizens/PermitsInspections/ViewPermitsAndInspections.aspx#inspectionsgrid"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Lauderdale By The Sea",
-    county: "BROWARD",
-    dept: "Lauderdale By The Sea Building Division",
-    address: "4501 North Ocean Drive, Lauderdale By The Sea, FL 33308",
-    emails: [{label:"Building",email:"building@lbts-fl.gov"}],
-    phones: [{label:"Building Division",phone:"+1 (954) 640-4215"}],
-    contractors: ["AUTANA ENTERPRISES INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.lauderdalebythesea-fl.gov/152/Building-Division"},{label:"IBuild",url:"https://www2.citizenserve.com/Portal/?installationid=117"},{label:"ProjectDox",url:"https://cap.geocivix.com/"},{label:"Schedule Inspection",url:"https://www2.citizenserve.com/Portal/?installationid=117"}],
-    inspections: "",
-    notes: "Horas: Lun–Vie 8am–4:30pm",
-    docs: []
-  },
-  {
-    city: "Lake Worth Beach",
-    county: "PALM BEACH",
-    dept: "Lake Worth Beach Building Department",
-    address: "(no dirección física registrada)",
-    emails: [{label:"Building",email:"bpermits@lakeworthbeachfl.gov"}],
-    phones: [],
-    contractors: [],
-    users: [],
-    links: [{label:"ProjectDox",url:"https://portal.lakeworthbeachfl.gov/online-services/building-permit-application/"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Key West",
-    county: "MONROE",
-    dept: "Monroe County Building Department",
-    address: "5503 College Road Suite 203, Key West, FL 33040",
-    emails: [{label:"Contractor License",email:"contractor-license@monroecounty-fl.gov"},{label:"Permitting Help",email:"permittinghelp@monroecounty-fl.gov"},{label:"Inspections Help",email:"inspectionshelp@monroecounty-fl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 295-3990"},{label:"Licensing",phone:"+1 (305) 289-2564"},{label:"Contractor Licensing Coord.",phone:"+1 (305) 292-4493"}],
-    contractors: ["FAS WINDOOR SOLUTIONS LLC","AUTANA ENTERPRISES INC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://fa-ettl-saasfaprod1.fa.ocs.oraclecloud.com/fscmUI/publicSector.html"}],
-    inspections: "",
-    notes: "El NOC recorded se sube directo al portal y debe llevar el número de permiso",
-    docs: []
-  },
-  {
-    city: "Sewalls Point",
-    county: "MARTIN",
-    dept: "Town of Sewall's Point",
-    address: "1 S. Sewall's Point Road, Sewalls Point, FL 34996",
-    emails: [{label:"Permits",email:"cgomez@sewallspoint.org"},{label:"Building Dept",email:"jreisinger@sewallspoint.org"},{label:"Town Hall",email:"townhall@sewallspoint.org"}],
-    phones: [{label:"Town Hall",phone:"+1 (772) 287-2455"}],
-    contractors: ["B4 CONSULTING INC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://www4.citizenserve.com/Portal/PortalController?Action=showHomePage&ctzPagePrefix=Portal_&installationID=164"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Key Biscayne",
-    county: "MIAMI DADE",
-    dept: "Village of Key Biscayne Building Division",
-    address: "88 W McIntyre St, Key Biscayne, FL 33149",
-    emails: [{label:"Jeremy Calleros - Dir. BZP",email:"jgauger@keybiscayne.fl.gov"},{label:"George Peon - Insp.",email:"gpeon@keybiscayne.fl.gov"},{label:"Rene Velazco - Official",email:"rvelazco@keybiscayne.fl.gov"},{label:"Joseph Garcell - Chief Insp.",email:"jgarcell@keybiscayne.fl.gov"},{label:"Dunia Yera",email:"dyera@keybiscayne.fl.gov"},{label:"Nancy Winters",email:"nwinters@keybiscayne.fl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 365-5512"},{label:"George Peon - Insp.",phone:"+1 (305) 365-5508"},{label:"Rene Velazco",phone:"+1 (305) 365-8902"},{label:"Joseph Garcell",phone:"+1 (305) 365-8941"}],
-    contractors: ["AUTANA ENTERPRISES INC","INFINITY AT YOUR SERVICE LLC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://keybiscayne.fl.gov/village_services/building_zoning___planning/building_division.php"},{label:"IBuild",url:"https://aca-prod.accela.com/KEYBISCAYNE/Cap/CapHome.aspx?module=Building&TabName=Building"},{label:"Schedule Inspection",url:"https://aca-prod.accela.com/KEYBISCAYNE/Login.aspx?ReturnUrl=%2fKEYBISCAYNE%2fCap%2fCapHome.aspx%3fIsToShowInspection%3dyes%26module%3dBuilding%26TabName%3dBuilding"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Jupiter",
-    county: "PALM BEACH",
-    dept: "Jupiter Building Department",
-    address: "210 Military Trail, Jupiter, FL 33458",
-    emails: [{label:"Building",email:"tojbuilding@jupiter.fl.us"}],
-    phones: [{label:"Building",phone:"+1 (561) 741-2286"}],
-    contractors: [],
-    users: [],
-    links: [],
-    inspections: "1-In Progress · 2-Buck · 3-Final",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Homestead",
-    county: "MIAMI DADE",
-    dept: "City of Homestead Building Safety Division",
-    address: "100 Civic Court, Homestead, FL 33030",
-    emails: [{label:"Inspections",email:"inspections@cityofhomestead.com"},{label:"Submit Permit",email:"permits@cityofhomestead.com"}],
-    phones: [{label:"Inspections",phone:"+1 (305) 224-4590"},{label:"Building",phone:"+1 (305) 224-4500"}],
-    contractors: ["GREENLINE REMODELING INC","B4 CONSULTING INC","AUTANA ENTERPRISES INC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://egov.cityofhomestead.com/eGovPlus91/permit/perm_status.aspx"}],
-    inspections: "Inspecciones por teléfono",
-    notes: "Submit por email a permits@cityofhomestead.com",
-    docs: []
-  },
-  {
-    city: "Hollywood",
-    county: "BROWARD",
-    dept: "City of Hollywood",
-    address: "2600 Hollywood Boulevard, Hollywood, FL 33020",
-    emails: [{label:"All Docs / Email principal",email:"epermits@hollywoodfl.org"},{label:"Contractor - J. Freitas",email:"jfreitas@hollywoodfl.org"},{label:"Contractor 2 - K. Reefe",email:"kreefe@hollywoodfl.org"},{label:"Jordan Kohn - Struct. Insp.",email:"jkohn@hollywoodfl.org"}],
-    phones: [{label:"Inspection Scheduling",phone:"+1 (954) 921-3646"},{label:"Building Ext 2",phone:"+1 (954) 921-3335"},{label:"John Chew - Inspector",phone:"+1 (954) 821-5051"},{label:"Jordan Kohn - Struct. Insp.",phone:"+1 (754) 260-4451"}],
-    contractors: ["ARISTONE INTERIORS INC","STORMWISE HURRICANE PROTECTION LLC","AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC","MEGA BUILDERS CORP","B4 CONSULTING INC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"},{user:"jlbraverman",pass:"CeU@HGXP2u9NXpn"},{user:"luisdesignwindows@gmail.com",pass:"Luis12345*"}],
-    links: [{label:"Building Dept",url:"http://www.hollywoodfl.org/328/Building"},{label:"IBuild (nuevo portal)",url:"https://aca-prod.accela.com/HOLLYWOOD/Dashboard.aspx"},{label:"Schedule Inspection",url:"tel:+1 (954) 921-3646"}],
-    inspections: "001-Window/Door Attachment · 002-Final-Structural",
-    notes: "Horas: Lun–Jue 7am–6pm",
-    docs: []
-  },
-  {
-    city: "Hillsboro Beach",
-    county: "BROWARD",
-    dept: "Town of Hillsboro Beach",
-    address: "1210 Hillsboro Mile, Hillsboro Beach, FL 33062",
-    emails: [{label:"Building Dept",email:"gfolles@cgasolutions.com"},{label:"Contractor Reg.",email:"building@townofhillsborobeach.com"}],
-    phones: [{label:"Building Dept",phone:"+1 (561) 587-6230"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [],
-    links: [],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Highland Beach",
-    county: "PALM BEACH",
-    dept: "Highland Beach Building Department",
-    address: "3614 S Ocean Blvd, Highland Beach, FL 33487",
-    emails: [],
-    phones: [{label:"Building",phone:"+1 (561) 278-4540"}],
-    contractors: ["B4 CONSULTING INC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://www.mgoconnect.org/cp/portal"}],
-    inspections: "",
-    notes: "Registro de contratista online por el portal. NOC Recorded se envía a través del portal.",
-    docs: []
-  },
-  {
-    city: "Hialeah Gardens",
-    county: "MIAMI DADE",
-    dept: "Hialeah Gardens Building / Zoning Department",
-    address: "10001 NW 87th Ave, Hialeah, FL 33016",
-    emails: [{label:"Building Official",email:"mmesa@cityofhialeahgardens.com"},{label:"Clerk Supervisor",email:"camor@cityofhialeahgardens.com"},{label:"Clerk",email:"cdominguez@cityofhialeahgardens.com"},{label:"Clerk 2",email:"aromero@cityofhialeahgardens.com"}],
-    phones: [{label:"Building",phone:"+1 (305) 558-4114"}],
-    contractors: ["STORMWISE HURRICANE PROTECTION LLC"],
-    users: [],
-    links: [],
-    inspections: "",
-    notes: "No tiene sistema online. Por email o en persona.",
-    docs: []
-  },
-  {
-    city: "Hialeah",
-    county: "MIAMI DADE",
-    dept: "Hialeah Building Division",
-    address: "501 Palm Ave, Hialeah, FL 33010",
-    emails: [{label:"Schedule Inspection",email:"inspections@hialeahfl.gov"},{label:"Online Submittals",email:"permits@hialeahfl.gov"},{label:"Records",email:"records@hialeahfl.gov"},{label:"Building / Contractor Reg.",email:"buildingdepartment@hialeahfl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 883-5825"}],
-    contractors: ["SANTIAN CONSTRUCTION GROUP LLC","GREENLINE REMODELING INC","AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [],
-    links: [],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Hallandale Beach",
-    county: "BROWARD",
-    dept: "The City of Hallandale Beach",
-    address: "400 S North Federal Hwy, Hallandale Beach, FL 33309",
-    emails: [{label:"Licensing",email:"eagbenohevi@cohb.org"},{label:"Building",email:"bldgmeeting@cohb.org"},{label:"Teresa - Supervisor",email:"tsisto@cohv.org"}],
-    phones: [{label:"Building Dept Ext 1",phone:"+1 (954) 457-1489"},{label:"Insp. Rafael Contreras",phone:"+1 (786) 748-2488"},{label:"Insp. Howard",phone:"+1 (786) 831-4555"}],
-    contractors: ["AUTANA ENTERPRISES INC","B4 CONSULTING INC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://hallandalebeachfl.gov/1036/Building-Division"},{label:"IBuild",url:"https://hallandalefl-energovpub.tylerhost.net/apps/SelfService#/myWork?tab=MyPlans&groupIndex=5"},{label:"Inspector Route",url:"https://hallandalefl-energovpub.tylerhost.net/Apps/SelfService#/inspection/todaysinspections"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Fort Lauderdale",
-    county: "BROWARD",
-    dept: "City of Fort Lauderdale",
-    address: "700 NW 19th Avenue, Fort Lauderdale, FL 33311",
-    emails: [{label:"Public Records",email:"propertyrecords@fortlauderdale.gov"}],
-    phones: [{label:"General Info",phone:"+1 (954) 828-6520"},{label:"Insp. Joel Myers",phone:"+1 (954) 325-1531"}],
-    contractors: ["RETOS SERVICE PLUS LLC","UPGRADE GENERAL CONTRACTORS, INC","AT QUALITY PLUMBING INC","DESCON GROUP INC","LATORRE CONSTRUCTION LLC","STORMWISE HURRICANE PROTECTION LLC","LUMAX MIAMI CORP","B4 CONSULTING INC","SUNSHINE ELECTRICAL CONTRACTORS CORP","DRORE DEVEPLOMENTS LLC"],
-    users: [{user:"luisdesignwindows@gmail.com",pass:"Luis12345*"},{user:"permits@laywindoor.com",pass:"Xfinity2024@"},{user:"LAYWINDOOR (nuevo)",pass:"Permits2024@"}],
-    links: [{label:"Building Dept",url:"https://www.fortlauderdale.gov/government/departments-a-h/development-services/building-services/building-permit-general-info"},{label:"IBuild",url:"https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?Module=Permits&TabName=Permits&capID1=21CAP&capID2=00000&capID3=00CDT&agencyCode=FTL"},{label:"Schedule Inspection",url:"https://aca-prod.accela.com/FTL/Cap/CapDetail.aspx?Module=Permits&TabName=Permits&capID1=21CAP&capID2=00000&capID3=00CDT&agencyCode=FTL"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "El Portal",
-    county: "MIAMI DADE",
-    dept: "Village of El Portal",
-    address: "500 NE 87th Street, El Portal, FL 33138",
-    emails: [{label:"Building Permits",email:"buildingclerk@villageofelportal.org"}],
-    phones: [{label:"Village Hall",phone:"+1 (305) 795-7880"}],
-    contractors: ["APC ENGINEERING ENTERPRISES INC."],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://cap.geocivix.com/secure/client/home"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Doral",
-    county: "MIAMI DADE",
-    dept: "City of Doral Building Department",
-    address: "8401 NW 53rd Terrace 2nd Floor, Doral, FL 33166",
-    emails: [{label:"Contractor Reg./Updates",email:"buildingrecordsclerk@cityofdoral.com"},{label:"Ana Paulino",email:"ana.paulino@cityofdoral.com"},{label:"Extension",email:"bdextension@cityofdoral.com"},{label:"City Clerk",email:"cityclerk@cityofdoral.com"},{label:"Cancellations",email:"bdcancel@cityofdoral.com"},{label:"Genesis Valdivia",email:"genesis.valdivia@cityofdoral.com"}],
-    phones: [{label:"Ext 3133 - Ana Paulino",phone:"+1 (305) 593-6700"}],
-    contractors: ["B4 CONSULTING INC","SANTIAN CONSTRUCTION GROUP LLC","INFINITY AT YOUR SERVICE LLC","GREENLINE REMODELING INC","POWER SEVEN CONSTRUCTION CORP","U.S. POWER & ELECTRIC INC","AUTANA ENTERPRISES INC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"},{user:"permitallone@gmail.com",pass:"Windows12345*"},{user:"luisdesignwindows@gmail.com",pass:"Windows12345*"}],
-    links: [{label:"Building Dept",url:"https://www.cityofdoral.com/"},{label:"IBuild",url:"https://doralfl-energovweb.tylerhost.net/apps/selfservice#/home"},{label:"Schedule Inspection",url:"https://doralfl-energovweb.tylerhost.net/apps/selfservice#/energovinspection/myremaininginspections"},{label:"Inspector Route",url:"https://doralfl-energovweb.tylerhost.net/apps/selfservice#/inspection/todaysinspections"}],
-    inspections: "",
-    notes: "Horas: Lun–Vie 7am–5pm. Condominios se tiran como permisos comerciales.",
-    docs: []
-  },
-  {
-    city: "Delray Beach",
-    county: "PALM BEACH",
-    dept: "Delray Beach Building Division",
-    address: "100 NW First Ave, Delray Beach, FL 33444",
-    emails: [{label:"Contractor",email:"businesstaxreceipts@mydelraybeach.com"}],
-    phones: [{label:"Building Div (3)",phone:"+1 (561) 243-7200"},{label:"Business Tax (4)",phone:"+1 (561) 243-7203"},{label:"Inspections",phone:"+1 (561) 233-5170"}],
-    contractors: ["GREENLINE REMODELING INC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://permitting.delraybeachfl.gov/"},{label:"ProjectDox",url:"https://weblink.mydelraybeach.com/Forms/ePLANS-Permit"},{label:"Schedule Inspection",url:"https://permitting.delraybeachfl.gov/"}],
-    inspections: "",
-    notes: "Usar VPN. Permit Intake & Plan Review: 8am–4pm",
-    docs: []
-  },
-  {
-    city: "Deerfield Beach",
-    county: "BROWARD",
-    dept: "Deerfield Beach Building Division",
-    address: "150 NE 2nd Ave, Deerfield Beach, FL 33441",
-    emails: [{label:"Contractor Reg.",email:"deerfieldinsprequest@cgasolutions.com"}],
-    phones: [{label:"Building",phone:"+1 (954) 480-4250"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [{user:"laywindoor",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://apps.gov-easy.com/Home/Main/Welcome?clientId=dce877e0-e162-4827-a60d-7249ec4e8fe2"}],
-    inspections: "",
-    notes: "Los permisos se someten en persona.",
-    docs: []
-  },
-  {
-    city: "Davie",
-    county: "BROWARD",
-    dept: "Davie Building Department",
-    address: "8800 Southwest 36th Street, Davie, FL 33328",
-    emails: [{label:"Building / NOC",email:"buildingdept@davie-fl.gov"},{label:"Contractor Update",email:"contractorreg@davie-fl.gov"},{label:"Inspections",email:"inspections@davie-fl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (954) 797-2066"},{label:"Building Division",phone:"+1 (954) 797-1111"},{label:"Inspection Route",phone:"+1 (954) 797-1128"},{label:"Payments",phone:"+1 (954) 797-2066"}],
-    contractors: ["OCEAN DOORS WINDOWS","AUTANA ENTERPRISES INC","CONSTRUCTORA VIANPE INC","STORMWISE HURRICANE PROTECTION LLC","UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [{user:"permits@laywindoor.com (ProjectDox)",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.davie-fl.gov/213/Online-Self-Service"},{label:"IBuild",url:"https://esuite.davie-fl.gov/eSuite.Permits/AdvancedSearchPage/AdvancedSearch.aspx"},{label:"ProjectDox",url:"https://davie-fl-us-projectdoxwebui.avolvecloud.com/"},{label:"Schedule Inspection",url:"tel:+19547971128"},{label:"Inspector Route",url:"tel:+19547972066"}],
-    inspections: "Email: inspections@davie-fl.gov · Tel Automatizado: 954-797-1128/1129 (requiere access code + inspection code del permit package)",
-    notes: "Horas: Lun–Vie 7:30am–3:30pm. Mandar PAP a buildingdept@davie-fl.gov y en 4-5 días mandan link para subir docs.",
-    docs: []
-  },
-  {
-    city: "Dania Beach",
-    county: "BROWARD",
-    dept: "Dania Beach Building Division",
-    address: "100 W Dania Beach Blvd, Dania Beach, FL 33004",
-    emails: [{label:"Permitting",email:"permitting@daniabeachfl.gov"},{label:"Schedule Inspections",email:"inspection@daniabeachfl.gov"}],
-    phones: [{label:"Contact",phone:"+1 (954) 924-6805"},{label:"Schedule Inspections",phone:"+1 (954) 924-6800"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://daniabeachfl.gov/125/Building-Division"},{label:"IBuild",url:"https://esuite-daniabeach-fl.tylertech.com/nwprod/eSuite.Permits/ContractorPermitDetailsPage/ContractorPermitDetails.aspx?id=102083"}],
-    inspections: "",
-    notes: "Permiso en persona",
-    docs: []
-  },
-  {
-    city: "Cutler Bay",
-    county: "MIAMI DADE",
-    dept: "Cutler Bay Building Department",
-    address: "10720 Caribbean Blvd #105, Cutler Bay, FL 33189",
-    emails: [{label:"Inspections",email:"inspections@cutlerbay-fl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 234-4193"}],
-    contractors: ["AUTANA ENTERPRISES INC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://websrvcs.cutlerbay-fl.gov/Default.aspx?Build=PM.pmPermit.ResultsList"},{label:"Schedule Inspection",url:"tel:+17865735515"}],
-    inspections: "Email: inspections@cutlerbay-fl.gov",
-    notes: "No tenemos cuenta, solo se busca información del permiso como invitado.",
-    docs: []
-  },
-  {
-    city: "Coral Springs",
-    county: "BROWARD",
-    dept: "Coral Springs Building Department",
-    address: "9500 West Sample Rd, Coral Springs, FL 33065",
-    emails: [{label:"Building",email:"buildingpermits@coralsprings.gov"}],
-    phones: [{label:"Customer Care",phone:"+1 (954) 344-1025"}],
-    contractors: ["AUTANA ENTERPRISES INC","EXCLUSIVE WINDOWS AND DOORS CORP","UPGRADE GENERAL CONTRACTORS, INC","RETOS SERVICE PLUS LLC"],
-    users: [{user:"permits.upgradegc@gmail.com (Upgrade GC)",pass:"UPgrade3350@"},{user:"Autana",pass:"Windows12345*"},{user:"Exclusive Windows",pass:"Xfinity2024@"},{user:"RETOS SERVICE PLUS LLC",pass:"Rp9878241@"}],
-    links: [{label:"Building Dept",url:"https://www.coralsprings.gov/Government/Departments/Building"},{label:"IBuild",url:"https://etrakit.coralsprings.gov/eTRAKiT/login.aspx?lt=either&rd=~/PermitApplication/confirmation.aspx"},{label:"Schedule Inspection",url:"https://etrakit.coralsprings.org/etrakit/dashboard.aspx"},{label:"Inspector Route",url:"https://etrakit.coralsprings.org/etrakit/ExistingInspections.aspx"}],
-    inspections: "",
-    notes: "NOC se sube al portal por attachment. Para someter se busca por folio separando por guiones (XXXX-XXXX-XXXX)",
-    docs: []
-  },
-  {
-    city: "Coral Gables",
-    county: "MIAMI DADE",
-    dept: "City of Coral Gables Building Department",
-    address: "405 Biltmore Way, Coral Gables, FL 33134",
-    emails: [{label:"Development Services",email:"developmentservices@coralgables.com"},{label:"Contractor Update",email:"contractor_renewals@coralgables.com"},{label:"Contractor",email:"contractors@coralgables.com"},{label:"Insp. Alain Gracia",email:"agracia@coralgables.com"}],
-    phones: [{label:"Building",phone:"+1 (305) 460-5245"},{label:"Insp. Fabio",phone:"+1 (305) 460-5341"},{label:"Historical",phone:"+1 (305) 460-5097"},{label:"Insp. Alain Gracia",phone:"+1 (305) 460-5258"},{label:"Kara Kautz - Historic",phone:"+1 (305) 446-6800"}],
-    contractors: ["SAP WINDOW AND DOOR SERVICES LLC","OCEAN DOORS WINDOWS","B4 CONSULTING INC","AUTANA ENTERPRISES INC","EXCLUSIVE WINDOWS AND DOORS CORP"],
-    users: [{user:"mercedessapwindows@gmail.com",pass:"Selah#1935"}],
-    links: [{label:"IBuild",url:"https://coralgablesfl-energovpub.tylerhost.net/Apps/SelfService#/myWork?tab=MyPermits&groupIndex=5"},{label:"Schedule Inspection",url:"https://coralgablesfl-energovpub.tylerhost.net/Apps/SelfService#/myWork?tab=MyPermits&groupIndex=5"},{label:"Inspector Route",url:"https://coralgablesfl-energovpub.tylerhost.net/Apps/SelfService#/inspection/todaysinspections"}],
-    inspections: "Orden: 1-Building Bucks/Mullions+Anchors · 2-Final Historic · 3-Final Zoning · 4-Final Building",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Royal Palm Beach",
-    county: "PALM BEACH",
-    dept: "City of Royal Palm Beach Building Department",
-    address: "1050 Royal Palm Beach Blvd, Royal Palm Beach, FL 33411",
-    emails: [{label:"Contractor Reg.",email:"btr@royalpalmbeachfl.gov"},{label:"Building",email:"buildingpermit@royalpalmbeachfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (561) 790-5128"}],
-    contractors: [],
-    users: [{user:"luisdesignwindows@gmail.com",pass:"Windows1"},{user:"permits@laywindoor.com",pass:"Xfinity2"}],
-    links: [{label:"Building Dept",url:"https://www.royalpalmbeachfl.gov/building/page/building-e-permit"},{label:"IBuild",url:"https://click2gov.royalpalmbeach.com/Click2GovBP/selectpermit.html?initialSearchView=true"},{label:"ProjectDox",url:"https://rpb-fl-us.avolvecloud.com/"}],
-    inspections: "",
-    notes: "",
-    docs: ["PAP","Contractor Data Sheet","NOC"]
-  },
-  {
-    city: "Cooper City",
-    county: "BROWARD",
-    dept: "City of Cooper City",
-    address: "9090 SW 50th Pl, Cooper City, FL 33328",
-    emails: [{label:"City Hall",email:"coopercityhall@coopercity.gov"},{label:"Building",email:"building@coopercity.gov"},{label:"Community Dev.",email:"egriffin@coopercity.gov"},{label:"Contractor Reg.",email:"aguess@coopercity.gov"}],
-    phones: [{label:"Building",phone:"+1 (954) 434-4300"}],
-    contractors: ["UPGRADE GENERAL CONTRACTORS, INC","MKT DEVELOMENT INC","SANTIAN CONSTRUCTION GROUP LLC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://bsaonline.com/?uid=2339%20&sitetransition=true"},{label:"ProjectDox",url:"https://coopercityfl-my.sharepoint.com/:f:/g/personal/cvega_coopercity_gov/EpUBtUGZ83ZMiV_yBhu3HdQBmaoedYPAV2KV7kFrzgPJFg"},{label:"Schedule Inspection",url:"https://bsaonline.com/CD_InspectionRequestV2/RequestInspection?wizardGuid=e2b32cd3-9e97-4ca7-8534-57a092e95765"}],
-    inspections: "",
-    notes: "No hay login",
-    docs: []
-  },
-  {
-    city: "Coconut Creek",
-    county: "BROWARD",
-    dept: "Coconut Creek Building / Permitting Department",
-    address: "4800 W Copans Rd, Coconut Creek, FL 33063",
-    emails: [{label:"Contractor Update",email:"ebuilding@coconutcreek.net"}],
-    phones: [{label:"Building Dept",phone:"+1 (954) 973-6750"}],
-    contractors: ["GREENLINE REMODELING INC","UPGRADE GENERAL CONTRACTORS, INC","SANTIAN CONSTRUCTION GROUP LLC"],
-    users: [{user:"luisdesignwindows@gmail.com",pass:"Luis12345*"},{user:"jgarcia@upgradegc.com",pass:"Xfinity2024@"},{user:"permits@greenlineremodeling.com",pass:"Green.2023"},{user:"oscar@santianco.com (Santian)",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.coconutcreek.net/sustainable-development/building-department"},{label:"IBuild",url:"https://coconutcreek.net/iframes/epermits"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Miami",
-    county: "MIAMI DADE",
-    dept: "City of Miami Building Department",
-    address: "444 SW 2 Avenue 4th Floor, Miami, FL 33130",
-    emails: [{label:"Building",email:"building@miamigov.com"},{label:"Certificates",email:"eplanbuilding@miamigov.com"},{label:"Unsafe Structures",email:"unsafestructures@miamigov.com"},{label:"Contractor",email:"dirodriguez@miamigov.com"},{label:"Solid Waste",email:"solidwastecustomerservice@miamigov.com"},{label:"Fire Violations",email:"fireprevention@miamigov.com"},{label:"Code Compliance",email:"codecompliance@miamigov.com"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 416-1100"},{label:"Unsafe Structures",phone:"+1 (305) 416-1177"},{label:"Solid Waste",phone:"+1 (305) 960-2801"},{label:"Fire Violations",phone:"+1 (305) 416-1600"},{label:"Code Compliance",phone:"+1 (305) 416-2087"},{label:"Public Works",phone:"+1 (305) 416-1278"}],
-    contractors: ["GREENLINE REMODELING INC","UPGRADE GENERAL CONTRACTORS, INC","B4 CONSULTING INC","AUTANA ENTERPRISES INC","LATORRE CONSTRUCTION LLC","STORMWISE HURRICANE PROTECTION LLC","EXCLUSIVE WINDOWS AND DOORS CORP","M.V. LUXURY GLASS CORP","AG CONTRUCTION MIA LLC","APC ENGINEERING ENTERPRISES INC.","ALL AMERICA CONSTRUCTION SERVICES"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.miami.gov/My-Government/Departments/Building"},{label:"IBuild",url:"http://apps.miamigov.com/iBuildPortal/Account/LogOn?ReturnUrl=%2fiBuildPortal%2f"},{label:"ProjectDox",url:"https://miami-fl-us.avolvecloud.com/ProjectDox/ViewProjects.aspx?TempPassword=False"},{label:"Schedule Inspection",url:"http://apps.miamigov.com/iBuildPortal/Account/LogOn?ReturnUrl=%2fiBuildPortal%2f"},{label:"Inspector Route",url:"https://apps.miamigov.com/iBuildPortal/BuildingInspection/PermitSearch/PermitSearch?redirect=InspectionRouteMap"}],
-    inspections: "",
-    notes: "Permisos bajo categoría REMODELING/REPAIRS. Para renovación usar Permit Manager > Complete.",
-    docs: []
-  },
-  {
-    city: "Cape Coral",
-    county: "LEE",
-    dept: "Cape Coral Building Permits",
-    address: "815 Nicholas Pkwy E, Cape Coral, FL 33990",
-    emails: [{label:"Permitting Services",email:"permits@capecoral.gov"},{label:"Registro Contratista",email:"contractorregistration@capecoral.gov"}],
-    phones: [{label:"Permitting Services",phone:"+1 (239) 574-0546"},{label:"Licensing",phone:"+1 (239) 574-0430"}],
-    contractors: ["GREENLINE REMODELING INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.capecoral.gov/department/community_development/customer_service-permitting/energov.php"},{label:"IBuild",url:"https://energovweb.capecoral.gov/EnerGovProd/SelfService#/home"}],
-    inspections: "Someter NOC recorded mediante portal. Cape Coral usa schedule propia.",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Boynton Beach",
-    county: "PALM BEACH",
-    dept: "Boynton Beach Building Division",
-    address: "100 E Boynton Beach Blvd, Boynton Beach, FL 33435",
-    emails: [{label:"Building",email:"buildingm@bbfl.us"}],
-    phones: [{label:"Building Division",phone:"+1 (561) 742-6350"}],
-    contractors: ["LATORRE CONSTRUCTION LLC","AUTANA ENTERPRISES INC","INFINITY AT YOUR SERVICE LLC"],
-    users: [{user:"permits@laywindoor.com",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://www.boynton-beach.org/permits/building-division"},{label:"IBuild",url:"https://www.sagesgov.com/boyntonbeach-fl"}],
-    inspections: "Inspection requests deben recibirse antes de 3:00pm para el día siguiente.",
-    notes: "Horas: Lun–Vie 8:00am–3:30pm",
-    docs: []
-  },
-  {
-    city: "Boca Raton",
-    county: "PALM BEACH",
-    dept: "City of Boca Raton Building Permits",
-    address: "200 NW 2nd Ave, Boca Raton, FL 33432",
-    emails: [{label:"Business Licenses",email:"businesslicenses@myboca.us"}],
-    phones: [{label:"Building",phone:"+1 (561) 393-7930"},{label:"Contractor",phone:"+1 (561) 393-7937"},{label:"Business Tax",phone:"+1 (561) 393-7952"}],
-    contractors: ["LATORRE CONSTRUCTION LLC","SUNSHINE ELECTRICAL CONTRACTORS CORP","MPP GROUP CORP","UPGRADE GENERAL CONTRACTORS, INC","INFINITY AT YOUR SERVICE LLC","STORMWISE HURRICANE PROTECTION LLC"],
-    users: [{user:"permits@laywindoor.com (ProjectDox)",pass:"Xfinity20"},{user:"permits@laywindoor.com (IBuild)",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://bocaratonfl-energovpub.tylerhost.net/Apps/SelfService#/search"},{label:"ProjectDox",url:"https://bocaedox.ci.boca-raton.fl.us/ProjectDox/"},{label:"Inspector Route",url:"https://apps.ci.boca-raton.fl.us/inspections/"}],
-    inspections: "NEED RECORDED AND CERTIFIED NOC",
-    notes: "Horas: Lun–Vie 8:00am–4:00pm",
-    docs: []
-  },
-  {
-    city: "Bay Harbor Islands",
-    county: "MIAMI DADE",
-    dept: "Bay Harbor Islands Building Department",
-    address: "1030 95th Street Trailer 3, Bay Harbor Islands, FL 33154",
-    emails: [{label:"Contractor Reg.",email:"lwentworth@bayharborislands-fl.gov"}],
-    phones: [{label:"Building / Inspections",phone:"+1 (305) 993-1786"}],
-    contractors: ["B4 CONSULTING INC","AUTANA ENTERPRISES INC"],
-    users: [{user:"DESIGN WINDOWS",pass:"Windows12345"}],
-    links: [{label:"IBuild / Schedule Inspection",url:"https://www.citizenserve.com/BHI"}],
-    inspections: "https://www.citizenserve.com/BHI",
-    notes: "Horas: Lun–Vie 8:00am–3:30pm",
-    docs: []
-  },
-  {
-    city: "Bal Harbour",
-    county: "MIAMI DADE",
-    dept: "Bal Harbour Building Department",
-    address: "655-96th Street, Bal Harbour, FL 33154",
-    emails: [{label:"Misael Rodriguez - Structural",email:"mrodriguez@balharbourfl.gov"},{label:"Olga Kalogeropoulos",email:"okalogeropoulos@balharbourfl.gov"},{label:"Village Building Official",email:"epalacio@balharbourfl.gov"}],
-    phones: [{label:"Building Dept",phone:"+1 (305) 865-7525"},{label:"Misael Rodriguez",phone:"+1 (305) 868-1141"},{label:"Olga Kalogeropoulos",phone:"+1 (305) 993-7366"}],
-    contractors: ["B4 CONSULTING INC","AUTANA ENTERPRISES INC"],
-    users: [{user:"laywindoor",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://balharbourfl.gov/departments/building/"},{label:"IBuild",url:"https://balh-trk.aspgov.com/eTRAKiT/"},{label:"Schedule Inspection",url:"https://vlg-balharbour-fl.smartgovcommunity.com/ApplicationPublic/ApplicationHome"},{label:"Inspector Route",url:"https://vlg-balharbour-fl.smartgovcommunity.com/ApplicationPublic/ApplicationInspectionSchedule"}],
-    inspections: "Plan Reviews e Inspecciones: Lunes, Martes, Miércoles y Jueves",
-    notes: "Hard Copy. Horas: Lun–Vie 8:00am–3:00pm",
-    docs: []
-  },
-  {
-    city: "Aventura",
-    county: "MIAMI DADE",
-    dept: "City of Aventura",
-    address: "19200 W Country Club Drive, Aventura, FL 33180",
-    emails: [{label:"Oscar Guerrero - Building Div.",email:"guerreroo@cityofaventura.com"},{label:"NOC (before inspection)",email:"permits@cityofaventura.com"},{label:"Permit Technician",email:"cdstaff4@cityofaventura.com"}],
-    phones: [{label:"City of Aventura",phone:"+1 (305) 466-8900"},{label:"Building Division",phone:"+1 (305) 466-8937"}],
-    contractors: ["ACCORDION SHIELDS OF FLORIDA","ARISTONE INTERIORS INC","AUTANA ENTERPRISES INC","EXCLUSIVE WINDOWS AND DOORS CORP","B4 CONSULTING INC"],
-    users: [{user:"LAYWINDOOR",pass:"Xfinity2024@"}],
-    links: [{label:"Building Dept",url:"https://etrakit.cityofaventura.com/etrakit/"},{label:"IBuild",url:"https://etrakit.cityofaventura.com/etrakit/Search/permit.aspx"},{label:"ProjectDox",url:"https://share.cityofaventura.com/filedrop/~LGlLff"},{label:"Schedule Inspection",url:"https://www.cityofaventura.com/FormCenter/Community-Development-4/ePermits-Inspection-Requests-43"},{label:"Inspector Route",url:"https://etrakit.cityofaventura.com/etrakit/ExistingInspections.aspx"}],
-    inspections: "No inspection until recorded N.O.C. submitted to permits@cityofaventura.com · Horas: Lun–Vie 8:30am–3:30pm",
-    notes: "NOC debe incluir número de permiso",
-    docs: []
-  },
-  {
-    city: "Miami Shores",
-    county: "MIAMI DADE",
-    dept: "Miami Shores Village",
-    address: "10050 NE 2 Ave, Miami Shores, FL 33138",
-    emails: [{label:"Contractor",email:"silveraa@msvfl.gov"},{label:"Contractor Update",email:"buildingdepartment@msvfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (305) 795-2204"},{label:"Planning & Zoning",phone:"+1 (305) 762-4864"},{label:"Building Inspector (Alex)",phone:"+1 (786) 325-6488"}],
-    contractors: ["AUTANA ENTERPRISES INC","B4 CONSULTING INC","JONATHAN LOUIS BRAVERMAN LLC","SANTIAN CONSTRUCTION GROUP LLC"],
-    users: [{user:"laywindoor",pass:"Xfinity2024@"}],
-    links: [{label:"IBuild",url:"https://villageofmiamishoresfl-energovweb.tylerhost.net/apps/selfservice#/search"},{label:"Inspector Route",url:"https://bldg.msvfl.gov/energov_prod/selfservice#/search"}],
-    inspections: "",
-    notes: "Horas: Lun–Vie 8:30am–5:00pm",
-    docs: []
-  },
-  {
-    city: "Wilton Manors",
-    county: "BROWARD",
-    dept: "City of Wilton Manors",
-    address: "2020 Wilton Drive, Wilton Manors, FL 33305",
-    emails: [{label:"Building Official",email:"cgrande@cgasolutions.com"},{label:"Asst. Building Official",email:"rsanchez@cgasolutions.com"}],
-    phones: [{label:"Building",phone:"+1 (954) 390-2180"},{label:"Building 2",phone:"+1 (954) 390-2100"}],
-    contractors: ["AUTANA ENTERPRISES INC","UPGRADE GENERAL CONTRACTORS, INC"],
-    users: [{user:"LAYWINDOOR",pass:"(no registrado)"}],
-    links: [{label:"IBuild",url:"https://www6.citizenserve.com/Portal/PortalController?Action=showHomePage&ctzPagePrefix=Portal_&installationID=125"}],
-    inspections: "",
-    notes: "Al crear proyecto dirige al pago del initial fee. Si no se paga, lo ponen en denegado. Una vez pagado, llamar a la ciudad.",
-    docs: []
-  },
-  {
-    city: "Weston",
-    county: "BROWARD",
-    dept: "City of Weston Building Department",
-    address: "17200 Royal Palm Boulevard, Weston, FL 33326",
-    emails: [{label:"Building",email:"building@westonfl.org"}],
-    phones: [{label:"Building",phone:"+1 (954) 385-0500"}],
-    contractors: ["CONSTRUCTORA VIANPE INC","GREENLINE REMODELING INC"],
-    users: [],
-    links: [{label:"Building Dept",url:"https://www.westonfl.org/government/permitting-services"},{label:"IBuild",url:"https://aca-prod.accela.com/WESTON/Dashboard.aspx?"},{label:"Schedule Inspection",url:"https://aca-prod.accela.com/WESTON/Dashboard.aspx?"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "West Miami",
-    county: "MIAMI DADE",
-    dept: "City of West Miami",
-    address: "(no dirección física registrada)",
-    emails: [],
-    phones: [],
-    contractors: [],
-    users: [],
-    links: [{label:"Building Dept",url:"https://cityofwestmiamifl.com/?SEC=FC973A77-51B1-4B37-9C4C-01F340DE723D"}],
-    inspections: "",
-    notes: "",
-    docs: []
-  },
-  {
-    city: "Wellington",
-    county: "PALM BEACH",
-    dept: "Village of Wellington",
-    address: "12300 Forest Hill Boulevard, Wellington, FL 33414",
-    emails: [{label:"Submit Permit",email:"buildingdocs@wellingtonfl.gov"}],
-    phones: [{label:"Building",phone:"+1 (561) 753-2430"},{label:"Engineering",phone:"+1 (561) 791-4002"},{label:"Utilities Engineering",phone:"+1 (561) 753-2436"}],
-    contractors: ["B4 CONSULTING INC","UPGRADE GENERAL CONTRACTORS, INC","LAR CONSTRUCTION INC"],
-    users: [],
-    links: [{label:"IBuild",url:"https://wellingtonfl-energovweb.tylerhost.net/apps/selfservice#/myWork"},{label:"ProjectDox",url:"https://wellington-fl-us.avolvecloud.com/Portal/Login/Index/Wellington-Prod"}],
-    inspections: "",
-    notes: "El proceso comienza enviando el PAP por email a BuildingDocs@wellingtonfl.gov y ellos envían acceso a ProjectDox.",
-    docs: []
-  }
-];
+var FLOW_READ='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ebbbb7e9f6c04250aa5e52203e20e9da/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lO76TtDfoRBLmY4cIGPYwl_HAfqywIvJMWGtrJBGUik';
+var FLOW_WRITE='https://defaultbab53ead1cca4e29882d60236ad916.f6.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/36e1e8119bff488a96d2675940103a29/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=XNsAO9TwUAN-iTYOWR6tu2CYAKPJacLZ2x7WKXl8Sv8';
+
+var RAW=[],filteredData=[],currentView='table',selectedCity=null,filterCounty='',editingId=null;
 
 var COUNTY_CLASSES={'MIAMI DADE':'county-miami','BROWARD':'county-broward','PALM BEACH':'county-palm'};
-function countyClass(c){return COUNTY_CLASSES[c]||'county-other'}
+function countyClass(c){return COUNTY_CLASSES[(c||'').toUpperCase()]||'county-other'}
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 
-var currentView='table',selectedCity=null,filteredData=RAW.slice(),filterCounty='';
+// Parse multi-line fields
+function parseLines(s){if(!s)return[];return s.split('\n').map(function(l){return l.trim()}).filter(function(l){return l.length>0})}
+function parsePairs(s,sep){if(!s)return[];return s.split('\n').map(function(l){var p=l.split(sep||':');if(p.length<2)return{label:'',val:l.trim()};return{label:p[0].trim(),val:p.slice(1).join(sep||':').trim()}}).filter(function(p){return p.val.length>0})}
+function pairsToStr(arr,sep){return arr.map(function(p){return p.label+(sep||':')+p.val}).join('\n')}
+function linesToStr(arr){return arr.join('\n')}
+
+function mapItem(it){
+  return{
+    id:it.ID,city:it.Title||'',county:(it.field_1||'').toUpperCase(),zip:it.field_2||'',
+    summaryPA:it.field_3||'',ibuild:it.field_4||'',projectdox:it.field_5||'',
+    inspSchedule:it.field_6||'',inspRoute:it.field_7||'',
+    dept:it.Departamento||'',address:it.Address||'',
+    emails:parsePairs(it.Emails,':'),phones:parsePairs(it.Phones,':'),
+    contractors:parseLines(it.Contractors),
+    links:parsePairs(it.Links,'|'),notes:it.Notes||'',docs:parseLines(it.Docs)
+  };
+}
+
+function showToast(msg,err){
+  var el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);padding:10px 20px;border-radius:30px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.6);z-index:999;transition:all 0.4s cubic-bezier(0.175,0.885,0.32,1.275);opacity:0;pointer-events:none';document.body.appendChild(el)}
+  el.style.background=err?'var(--rd)':'var(--gn)';el.style.color=err?'white':'#0f1117';el.textContent=msg;
+  el.style.transform='translateX(-50%) translateY(0)';el.style.opacity='1';
+  clearTimeout(el._t);el._t=setTimeout(function(){el.style.transform='translateX(-50%) translateY(100px)';el.style.opacity='0'},3000);
+}
+
+async function loadFromSP(){
+  document.getElementById('contentArea').innerHTML='<div style="text-align:center;padding:80px;color:var(--mt)"><div style="display:inline-block;width:28px;height:28px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:spin 0.8s linear infinite"></div><br/><br/>Cargando ciudades...</div>';
+  try{
+    var r=await fetch(FLOW_READ,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    var data=await r.json();
+    if(!Array.isArray(data)){showToast('Error: respuesta no válida',true);return}
+    RAW=data.map(mapItem).filter(function(r){return r.city.length>0});
+    RAW.sort(function(a,b){return a.city.localeCompare(b.city)});
+    showToast(RAW.length+' ciudades cargadas');
+    filterData();
+  }catch(e){showToast('Error: '+e.message,true);document.getElementById('contentArea').innerHTML='<div style="text-align:center;padding:80px;color:var(--rd)">Error al cargar</div>'}
+}
 
 function setFilterCounty(v){filterCounty=filterCounty===v?'':v;filterData()}
 function clearF(){filterCounty='';document.getElementById('searchBox').value='';selectedCity=null;filterData()}
@@ -1218,14 +264,14 @@ function filterData(){
   filteredData=RAW.filter(function(r){
     if(filterCounty&&r.county!==filterCounty)return false;
     if(!q)return true;
-    var h=[r.city,r.county,r.dept,r.address,r.notes,r.inspections].concat(r.emails.map(function(e){return e.email+e.label})).concat(r.phones.map(function(p){return p.phone+p.label})).concat(r.contractors).concat(r.links.map(function(l){return l.label})).join(' ').toLowerCase();
+    var h=[r.city,r.county,r.dept,r.address,r.notes,r.inspSchedule].concat(r.emails.map(function(e){return e.val+e.label})).concat(r.phones.map(function(p){return p.val+p.label})).concat(r.contractors).concat(r.links.map(function(l){return l.label})).join(' ').toLowerCase();
     return h.includes(q);
   });
   render();
 }
 
 function renderFilters(){
-  var counties=[];var seen={};RAW.forEach(function(r){if(!seen[r.county]){seen[r.county]=true;counties.push(r.county)}});counties.sort();
+  var counties=[];var seen={};RAW.forEach(function(r){if(r.county&&!seen[r.county]){seen[r.county]=true;counties.push(r.county)}});counties.sort();
   var h='<button class="fb '+(filterCounty?'':'on')+'" onclick="setFilterCounty(\'\')">Todos</button>';
   counties.forEach(function(c){h+='<button class="fb '+(filterCounty===c?'on':'')+'" onclick="setFilterCounty(\''+c.replace(/'/g,"\\'")+'\')">'+esc(c)+'</button>'});
   document.getElementById('fCounty').innerHTML=h;
@@ -1235,8 +281,7 @@ function renderFilters(){
 function render(){
   renderFilters();
   var area=document.getElementById('contentArea');
-  if(currentView==='table'&&!selectedCity){renderTable(area)}
-  else{renderDetailView(area)}
+  if(currentView==='table'&&!selectedCity){renderTable(area)}else{renderDetailView(area)}
 }
 
 function renderTable(area){
@@ -1245,24 +290,22 @@ function renderTable(area){
       '<td><span class="badge '+countyClass(r.county)+'">'+esc(r.county)+'</span></td>'+
       '<td style="font-weight:700;color:var(--tx)">'+esc(r.city)+'</td>'+
       '<td><div style="font-weight:600;font-size:11px">'+esc(r.dept)+'</div><div style="font-size:10px;color:var(--mt)">'+esc(r.address)+'</div></td>'+
-      '<td>'+r.emails.slice(0,2).map(function(e){return'<div style="font-size:10px;color:var(--ac2)">'+esc(e.email)+'</div>'}).join('')+(r.emails.length>2?'<div style="font-size:9px;color:var(--mt)">+'+( r.emails.length-2)+' más</div>':'')+'</td>'+
-      '<td>'+r.phones.slice(0,2).map(function(p){return'<div style="font-size:10px">'+esc(p.phone)+'</div>'}).join('')+'</td>'+
+      '<td>'+r.emails.slice(0,2).map(function(e){return'<div style="font-size:10px;color:var(--ac2)">'+esc(e.val)+'</div>'}).join('')+(r.emails.length>2?'<div style="font-size:9px;color:var(--mt)">+'+(r.emails.length-2)+' más</div>':'')+'</td>'+
+      '<td>'+r.phones.slice(0,2).map(function(p){return'<div style="font-size:10px">'+esc(p.val)+'</div>'}).join('')+'</td>'+
       '<td style="font-size:10px">'+r.contractors.slice(0,2).join(', ')+(r.contractors.length>2?' +':'')+'</td>'+
-      '<td>'+r.links.slice(0,2).map(function(l){return'<a href="'+esc(l.url)+'" target="_blank" onclick="event.stopPropagation()" style="display:block;font-size:10px;color:var(--ac2);text-decoration:none">'+esc(l.label)+'</a>'}).join('')+'</td>'+
+      '<td>'+(r.ibuild?'<a href="'+esc(r.ibuild)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:var(--ac2);text-decoration:none">iBuild</a>':'')+(r.projectdox?' <a href="'+esc(r.projectdox)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;color:var(--ac2);text-decoration:none">ProjectDox</a>':'')+'</td>'+
     '</tr>';
   }).join('');
   area.innerHTML='<div class="table-view"><table class="tbl"><thead><tr><th>Condado</th><th>Ciudad</th><th>Departamento</th><th>Emails</th><th>Teléfonos</th><th>Contractors</th><th>Enlaces</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
 function renderDetailView(area){
-  // City sidebar + detail panel
   var groups={};filteredData.forEach(function(r){if(!groups[r.county])groups[r.county]=[];groups[r.county].push(r)});
   var sortedCounties=Object.keys(groups).sort();
   var sidebarHTML=sortedCounties.map(function(county){
     return'<div class="cg-header"><span>'+esc(county)+'</span><span class="cg-badge">'+groups[county].length+'</span></div>'+
     groups[county].sort(function(a,b){return a.city.localeCompare(b.city)}).map(function(r){
-      return'<div class="ci '+(selectedCity===r.city?'act':'')+'" onclick="selectCity(\''+r.city.replace(/'/g,"\\'")+'\')">'+ 
-        '<div class="ci-dot"></div>'+esc(r.city)+'</div>';
+      return'<div class="ci '+(selectedCity===r.city?'act':'')+'" onclick="selectCity(\''+r.city.replace(/'/g,"\\'")+'\')">'+'<div class="ci-dot"></div>'+esc(r.city)+'</div>';
     }).join('');
   }).join('');
 
@@ -1270,32 +313,102 @@ function renderDetailView(area){
   if(selectedCity){
     var r=RAW.find(function(x){return x.city===selectedCity});
     if(r){
-      detailHTML='<div class="dc"><div class="dc-header"><div><div class="dc-city">'+esc(r.city)+'</div><div class="dc-dept">'+esc(r.dept)+'</div><div class="dc-addr">📍 '+esc(r.address)+'</div></div><span class="dc-county badge '+countyClass(r.county)+'">'+esc(r.county)+'</span></div><div class="dc-body">';
-      // Emails
-      detailHTML+='<div class="dc-section"><h4><span>📧</span> Emails</h4>'+(r.emails.length?r.emails.map(function(e){return'<div class="dc-item"><span class="dc-label">'+esc(e.label)+'</span><span class="dc-val">'+esc(e.email)+'</span></div>'}).join(''):'<div class="dc-empty">Sin emails</div>')+'</div>';
-      // Phones
-      detailHTML+='<div class="dc-section"><h4><span>📞</span> Teléfonos</h4>'+(r.phones.length?r.phones.map(function(p){return'<div class="dc-item"><span class="dc-label">'+esc(p.label)+'</span><span class="dc-val">'+esc(p.phone)+'</span></div>'}).join(''):'<div class="dc-empty">Sin teléfonos</div>')+'</div>';
-      // Contractors
-      detailHTML+='<div class="dc-section full"><h4><span>🏗️</span> Contractors</h4><div style="display:flex;flex-wrap:wrap;gap:4px">'+(r.contractors.length?r.contractors.map(function(c){return'<span class="dc-tag">'+esc(c)+'</span>'}).join(''):'<span class="dc-empty">Sin contractors</span>')+'</div></div>';
-      // Users
-      detailHTML+='<div class="dc-section"><h4><span>👤</span> Usuarios</h4>'+(r.users.length?r.users.map(function(u){return'<div class="dc-user"><div>👤 '+esc(u.user)+'</div><div style="color:var(--am)">🔑 '+esc(u.pass)+'</div></div>'}).join(''):'<div class="dc-empty">Sin usuarios</div>')+'</div>';
-      // Links
-      detailHTML+='<div class="dc-section"><h4><span>🔗</span> Enlaces</h4>'+(r.links.length?r.links.map(function(l){return'<div class="dc-item"><span class="dc-label">'+esc(l.label)+'</span><a class="dc-link" href="'+esc(l.url)+'" target="_blank">'+esc(l.url.replace('https://','').substring(0,45))+'…</a></div>'}).join(''):'<div class="dc-empty">Sin enlaces</div>')+'</div>';
-      // Inspections + Notes
-      detailHTML+='<div class="dc-section"><h4><span>🔍</span> Inspecciones</h4><div class="dc-item">'+(r.inspections?esc(r.inspections):'<span class="dc-empty">Sin datos</span>')+'</div></div>';
-      detailHTML+='<div class="dc-section"><h4><span>📝</span> Notas</h4><div class="dc-item" style="white-space:pre-wrap">'+(r.notes?esc(r.notes):'<span class="dc-empty">Sin notas</span>')+'</div></div>';
-      // Docs
+      detailHTML='<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="topbar-btn" onclick="openEditModal('+r.id+')">✏️ Editar</button></div>';
+      detailHTML+='<div class="dc"><div class="dc-header"><div><div class="dc-city">'+esc(r.city)+'</div><div class="dc-dept">'+esc(r.dept)+'</div><div class="dc-addr">📍 '+esc(r.address)+'</div></div><span class="dc-county badge '+countyClass(r.county)+'">'+esc(r.county)+'</span></div><div class="dc-body">';
+      detailHTML+='<div class="dc-section"><h4><span>📧</span> Emails</h4>'+(r.emails.length?r.emails.map(function(e){return'<div class="dc-item"><span class="dc-label">'+esc(e.label)+'</span><span class="dc-val">'+esc(e.val)+'</span></div>'}).join(''):'<div class="dc-empty">—</div>')+'</div>';
+      detailHTML+='<div class="dc-section"><h4><span>📞</span> Teléfonos</h4>'+(r.phones.length?r.phones.map(function(p){return'<div class="dc-item"><span class="dc-label">'+esc(p.label)+'</span><span class="dc-val">'+esc(p.val)+'</span></div>'}).join(''):'<div class="dc-empty">—</div>')+'</div>';
+      detailHTML+='<div class="dc-section full"><h4><span>🏗️</span> Contractors</h4><div style="display:flex;flex-wrap:wrap;gap:4px">'+(r.contractors.length?r.contractors.map(function(c){return'<span class="dc-tag">'+esc(c)+'</span>'}).join(''):'<span class="dc-empty">—</span>')+'</div></div>';
+      // Links: built-in + custom
+      var allLinks=[];
+      if(r.summaryPA)allLinks.push({label:'Summary PA',val:r.summaryPA});
+      if(r.ibuild)allLinks.push({label:'iBuild',val:r.ibuild});
+      if(r.projectdox)allLinks.push({label:'ProjectDox',val:r.projectdox});
+      if(r.inspRoute)allLinks.push({label:'Inspections Route',val:r.inspRoute});
+      allLinks=allLinks.concat(r.links);
+      detailHTML+='<div class="dc-section"><h4><span>🔗</span> Enlaces</h4>'+(allLinks.length?allLinks.map(function(l){return'<div class="dc-item"><span class="dc-label">'+esc(l.label)+'</span><a class="dc-link" href="'+esc(l.val)+'" target="_blank">'+esc(l.val.replace('https://','').substring(0,50))+'</a></div>'}).join(''):'<div class="dc-empty">—</div>')+'</div>';
+      detailHTML+='<div class="dc-section"><h4><span>🔍</span> Inspecciones</h4><div class="dc-item">'+(r.inspSchedule?esc(r.inspSchedule):'<span class="dc-empty">—</span>')+'</div></div>';
+      detailHTML+='<div class="dc-section"><h4><span>📝</span> Notas</h4><div class="dc-item" style="white-space:pre-wrap">'+(r.notes?esc(r.notes):'<span class="dc-empty">—</span>')+'</div></div>';
+      if(r.zip){detailHTML+='<div class="dc-section full"><h4><span>📮</span> ZIP Codes</h4><div class="dc-item" style="font-family:JetBrains Mono;font-size:11px">'+esc(r.zip)+'</div></div>'}
       if(r.docs.length){detailHTML+='<div class="dc-section full"><h4><span>📄</span> Documentos</h4><div style="display:flex;flex-wrap:wrap;gap:4px">'+r.docs.map(function(d){return'<span class="dc-tag" style="border-color:rgba(234,179,8,0.3);color:var(--am)">'+esc(d)+'</span>'}).join('')+'</div></div>'}
       detailHTML+='</div></div>';
     }
   }else{
     detailHTML='<div class="detail-empty"><div>🏛️<br/><br/>Selecciona una ciudad<br/>de la lista</div></div>';
   }
-
   area.innerHTML='<div class="city-sidebar">'+sidebarHTML+'</div><div class="detail-panel">'+detailHTML+'</div>';
 }
 
-filterData();
+// ── Edit / Create Modal ──
+function openEditModal(id){
+  editingId=id;
+  var r=id?RAW.find(function(x){return x.id===id}):null;
+  document.getElementById('editTitle').textContent=r?'Editar: '+r.city:'Nueva Ciudad';
+  var fields=[
+    {key:'city',label:'Ciudad',type:'input',val:r?r.city:''},
+    {key:'county',label:'Condado',type:'input',val:r?r.county:''},
+    {key:'dept',label:'Departamento',type:'input',val:r?r.dept:''},
+    {key:'address',label:'Dirección',type:'input',val:r?r.address:''},
+    {key:'zip',label:'ZIP Codes',type:'input',val:r?r.zip:''},
+    {key:'emails',label:'Emails (label:email por línea)',type:'textarea',val:r?r.emails.map(function(e){return e.label+':'+e.val}).join('\n'):''},
+    {key:'phones',label:'Teléfonos (label:phone por línea)',type:'textarea',val:r?r.phones.map(function(p){return p.label+':'+p.val}).join('\n'):''},
+    {key:'contractors',label:'Contractors (uno por línea)',type:'textarea',val:r?r.contractors.join('\n'):''},
+    {key:'links',label:'Enlaces (label|url por línea)',type:'textarea',val:r?r.links.map(function(l){return l.label+'|'+l.val}).join('\n'):''},
+    {key:'summaryPA',label:'Summary PA (URL)',type:'input',val:r?r.summaryPA:''},
+    {key:'ibuild',label:'iBuild (URL)',type:'input',val:r?r.ibuild:''},
+    {key:'projectdox',label:'ProjectDox (URL)',type:'input',val:r?r.projectdox:''},
+    {key:'inspSchedule',label:'Inspecciones',type:'input',val:r?r.inspSchedule:''},
+    {key:'inspRoute',label:'Inspections Route (URL)',type:'input',val:r?r.inspRoute:''},
+    {key:'notes',label:'Notas',type:'textarea',val:r?r.notes:''},
+    {key:'docs',label:'Documentos (uno por línea)',type:'textarea',val:r?r.docs.join('\n'):''}
+  ];
+  document.getElementById('editBody').innerHTML=fields.map(function(f){
+    return'<div class="emodal-row"><div class="emodal-lbl">'+f.label+'</div>'+
+    (f.type==='textarea'?'<textarea class="emodal-textarea" id="ef_'+f.key+'">'+esc(f.val)+'</textarea>':
+    '<input class="emodal-input" id="ef_'+f.key+'" value="'+esc(f.val)+'"/>')+
+    '</div>';
+  }).join('');
+  document.getElementById('editOv').className='emodal-ov open';
+}
+function closeEdit(){document.getElementById('editOv').className='emodal-ov';editingId=null}
+
+function gef(k){var el=document.getElementById('ef_'+k);return el?el.value:''}
+
+async function saveCity(){
+  var city=gef('city').trim();
+  if(!city){showToast('Ciudad es requerida',true);return}
+  var btn=document.getElementById('editSave');btn.disabled=true;btn.textContent='Guardando...';
+  var payload={
+    itemId:editingId||0,
+    title:city,
+    field_1:gef('county').trim(),
+    field_2:gef('zip').trim(),
+    field_3:gef('summaryPA').trim(),
+    field_4:gef('ibuild').trim(),
+    field_5:gef('projectdox').trim(),
+    field_6:gef('inspSchedule').trim(),
+    field_7:gef('inspRoute').trim(),
+    Departamento:gef('dept').trim(),
+    Address:gef('address').trim(),
+    Emails:gef('emails').trim(),
+    Phones:gef('phones').trim(),
+    Contractors:gef('contractors').trim(),
+    Links:gef('links').trim(),
+    Notes:gef('notes').trim(),
+    Docs:gef('docs').trim()
+  };
+  try{
+    var r=await fetch(FLOW_WRITE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(r.ok){
+      showToast(editingId?'Ciudad actualizada ✓':'Ciudad creada ✓');
+      closeEdit();
+      await loadFromSP();
+      if(city)selectCity(city);
+    }else{showToast('Error al guardar',true)}
+  }catch(e){showToast('Error: '+e.message,true)}
+  btn.disabled=false;btn.textContent='💾 Guardar';
+}
+
+loadFromSP();
 </script>
 </body>
 </html>
