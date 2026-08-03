@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Test API — Email Manager Pro</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e8eaf0;padding:20px;font-size:14px}
+    h1{margin-bottom:10px;font-size:20px}
+    p{color:#9398ad;margin-bottom:16px}
+    .row{display:flex;gap:8px;margin-bottom:8px;max-width:520px}
+    input{flex:1;padding:9px 12px;background:#1a1d27;border:1px solid #353a4f;border-radius:8px;color:#e8eaf0;font-size:13px}
+    .btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin:4px 4px 4px 0;color:white}
+    .btn-blue{background:#60a5fa}.btn-green{background:#34d399}.btn-orange{background:#fb923c}.btn-grey{background:#4b5563}
+    .btn:hover{opacity:0.85}.btn:disabled{opacity:0.4;cursor:wait}
+    #log{background:#1a1d27;border:1px solid #353a4f;border-radius:8px;padding:16px;margin-top:16px;white-space:pre-wrap;font-family:monospace;font-size:12px;max-height:500px;overflow-y:auto;line-height:1.8}
+    .ok{color:#34d399}.err{color:#f87171}.info{color:#60a5fa}.warn{color:#fbbf24}
+  </style>
+</head>
+<body>
+<h1>Test API — Email Manager Pro</h1>
+<p>Prueba las funciones <code>/api/*</code> que hablan con SharePoint. Requiere iniciar sesion: los endpoints rechazan peticiones sin token.</p>
+
+<div class="row"><input type="email" id="email" placeholder="Correo Supabase" autocomplete="username"/></div>
+<div class="row"><input type="password" id="password" placeholder="Contrasena" autocomplete="current-password"/>
+  <button class="btn btn-blue" id="btnLogin" onclick="doLogin()">Entrar</button></div>
+<div>
+  <button class="btn btn-green" id="btnRead" onclick="testRead()">1. Leer proyectos</button>
+  <button class="btn btn-orange" id="btnWrite" onclick="testWrite()">2. Escribir fila de prueba</button>
+  <button class="btn btn-grey" onclick="testNoAuth()">3. Probar sin token (debe dar 401)</button>
+</div>
+<div id="log">Listo para probar...
+</div>
+
+<script>
+var logEl=document.getElementById('log');
+var session=null,config=null;
+function addLog(msg,cls){logEl.innerHTML+='<span class="'+(cls||'')+'">'+msg+'</span>\n';logEl.scrollTop=logEl.scrollHeight}
+
+async function getConfig(){
+  if(config)return config;
+  var r=await fetch('/api/config');
+  if(!r.ok)throw new Error('El servidor no tiene SUPABASE_URL / SUPABASE_ANON_KEY configuradas');
+  config=await r.json();
+  return config;
+}
+
+async function doLogin(){
+  var btn=document.getElementById('btnLogin');btn.disabled=true;
+  addLog('--- LOGIN ---','info');
+  try{
+    var c=await getConfig();
+    var r=await fetch(c.url+'/auth/v1/token?grant_type=password',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',apikey:c.anonKey},
+      body:JSON.stringify({email:document.getElementById('email').value.trim(),password:document.getElementById('password').value})
+    });
+    var body=await r.json();
+    if(!r.ok)throw new Error(body.error_description||body.msg||'Credenciales invalidas');
+    session=body;
+    document.getElementById('password').value='';
+    addLog('Sesion iniciada como '+(body.user&&body.user.email),'ok');
+  }catch(e){addLog('Error: '+e.message,'err')}
+  btn.disabled=false;
+}
+
+function authHeaders(){
+  if(!session)throw new Error('Inicia sesion primero');
+  return{Authorization:'Bearer '+session.access_token};
+}
+
+async function testRead(){
+  var btn=document.getElementById('btnRead');btn.disabled=true;
+  addLog('--- LEER PROYECTOS ---','info');
+  try{
+    var r=await fetch('/api/projects',{headers:authHeaders()});
+    addLog('HTTP Status: '+r.status);
+    var data=await r.json();
+    if(r.ok&&Array.isArray(data.projects)){
+      addLog('Proyectos encontrados: '+data.projects.length,'ok');
+      data.projects.slice(0,15).forEach(function(t,i){addLog('  '+(i+1)+'. '+t)});
+      if(data.projects.length>15)addLog('  ... y '+(data.projects.length-15)+' mas');
+    }else{
+      addLog('Respuesta: '+JSON.stringify(data),'warn');
+    }
+  }catch(e){addLog('Error: '+e.message,'err')}
+  btn.disabled=false;
+}
+
+async function testWrite(){
+  var btn=document.getElementById('btnWrite');btn.disabled=true;
+  addLog('--- ESCRIBIR TEST ---','info');
+  try{
+    var r=await fetch('/api/sync',{
+      method:'POST',
+      headers:Object.assign({'Content-Type':'application/json'},authHeaders()),
+      body:JSON.stringify({
+        titulo:'TEST desde sp-test',
+        proyecto:'CCP-0031-16475 GOLF CLUB RD 313 WESTON, FLORIDA 33326',
+        asunto:'Email de prueba',
+        de:'test@test.com',
+        fecha:new Date().toISOString(),
+        estado:'Pendiente',
+        notas:'Esta es una nota de prueba creada desde sp-test'
+      })
+    });
+    addLog('HTTP Status: '+r.status);
+    var data=await r.json();
+    if(data.ok)addLog('Registro creado exitosamente!','ok');
+    else addLog('Respuesta: '+JSON.stringify(data),'warn');
+  }catch(e){addLog('Error: '+e.message,'err')}
+  btn.disabled=false;
+}
+
+async function testNoAuth(){
+  addLog('--- SIN TOKEN (control de seguridad) ---','info');
+  var r=await fetch('/api/projects');
+  var ok=r.status===401;
+  addLog('HTTP Status: '+r.status+(ok?'  <- correcto, el endpoint esta protegido':'  <- ESTO ESTA MAL, deberia ser 401'),ok?'ok':'err');
+}
+</script>
+</body>
+</html>

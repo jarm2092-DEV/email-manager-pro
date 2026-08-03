@@ -1,0 +1,14 @@
+# graphify knowledge graph (local analysis output)
+graphify-out/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.swp
+
+# Local secrets / config
+.env
+.env.local
+config.local.js

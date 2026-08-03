@@ -1,0 +1,10 @@
+{
+  "name": "email-manager-pro",
+  "version": "1.3.0",
+  "private": true,
+  "description": "Outlook add-in for email notes, statuses and project linkage, with a Vercel proxy to Power Automate.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  }
+}
