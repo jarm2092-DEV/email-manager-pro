@@ -105,6 +105,29 @@ Set in Vercel → Settings → Environment Variables. See `.env.example`.
 | `SUPABASE_URL` | no | Project URL |
 | `SUPABASE_ANON_KEY` | no | Served to the client by `/api/config` |
 
+## Open security risk — old flows still reachable
+
+The two original Power Automate flows had their trigger URLs, signature included, committed to
+this public repo. Those signatures are still valid:
+
+| Old flow (trigger GUID) | Exposure | Status |
+|---|---|---|
+| `6bd81083debf4e7a8100cd389d9cb8e1` | Read: anyone can list the SharePoint projects | **open** — flow not located in the portal |
+| `9307f259fdeb4e529b3fd0641f55c8d2` | Write: anyone can create rows in the tracking list | **open** until turned off |
+
+Rotating the client-side code does not help here: the exposure is the flow endpoint itself, and
+it stays open until each flow is turned off or deleted. Power Automate cannot search flows by
+trigger GUID, only by name, which is why the read one has not been found yet.
+
+Two ways to locate a flow when only the trigger GUID is known:
+1. Admin center → Environments → Resources → Flows, narrowed by created date
+   (both were created between 2026-03-12 and 2026-04-08).
+2. POST `{}` to the leaked URL, then look for the flow whose 28-day run history shows a run
+   from seconds ago.
+
+The write flow is the one that matters more — it accepts unauthenticated writes. Turn it off as
+soon as the replacement (`850a70cb…`) is confirmed working.
+
 ## Known issues / backlog
 
 1. `removeProject()` / `addProject()` operate on `getProjects()`, which is the merged
