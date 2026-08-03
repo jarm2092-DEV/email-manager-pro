@@ -83,6 +83,17 @@ Never add an `UPDATE` policy on `user_roles` that lets a user write their own ro
 per-row, not per-column, so it would let anyone set `role='Admin'` with the anon key. CCP uses a
 `security definer` function for the `last_seen` heartbeat instead.
 
+## Flows
+
+This add-in uses **its own Power Automate flows only** — the two it always had (`FLOW_READ_URL`
+for the project list, `FLOW_WRITE_URL` for the tracking rows), plus new dedicated ones if a need
+appears. It never calls CCP's flows.
+
+That isolation is deliberate and worth keeping: CCP's save flows (`FLOW_SAVE`, `FLOW13`) do a
+full item update, so any mapped column that is not resent is blanked. Writing through them from
+here would silently wipe project data. A new requirement gets a new dedicated flow, never an
+extra field bolted onto a shared save flow.
+
 ## Environment variables
 
 Set in Vercel → Settings → Environment Variables. See `.env.example`.
