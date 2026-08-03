@@ -23,7 +23,8 @@ field to individual emails, plus sync to SharePoint through Power Automate.
 | `api/config.js` | Serves `SUPABASE_URL` + anon key so the client can log in. |
 | `api/projects.js` | Reads the project list from SharePoint via `FLOW_READ_URL`. Auth required. |
 | `api/sync.js` | Writes a tracking row via `FLOW_WRITE_URL`. Auth required. |
-| `api/_supabase.js` | Token verification helpers. The `_` prefix keeps it off the routing table. |
+| `api/me.js` | Returns the caller's `display_name` and role from CCP's `user_roles`. |
+| `api/_supabase.js` | Token verification and profile lookup. The `_` prefix keeps it off the routing table. |
 
 ## Architecture
 
@@ -63,8 +64,24 @@ Other core pieces:
 ## Identity
 
 Outlook runs on a single shared tenant account, so Outlook cannot tell users apart. Supabase is
-the only real identity: each person has their own account, and `api/sync.js` stamps
-`enviado_por` on every SharePoint row from the verified token.
+the only real identity — and it is **the same Supabase project as CCP**
+(`PERMIT-MANAGER-SUITE`), with the same accounts and the same `user_roles` table
+(`user_id, email, role, display_name, last_seen`; roles `Admin`, `Manager`, `Dibujante`).
+
+- `api/me.js` reads that row for the caller and returns `{email, displayName, role}`.
+  The lookup runs as the caller, so RLS decides; a miss falls back to the email local part
+  rather than failing the request.
+- `api/sync.js` stamps `enviado_por` (display name), `enviado_por_email` and `rol` on every
+  SharePoint row, all from the verified token.
+- The taskpane signs notes with `display_name`, so a note reads the same here as in CCP.
+
+Consequence of the shared project: **any CCP user can call these endpoints**, not just the
+people who use the add-in. If that ever needs narrowing, gate on `profile.role` in
+`_supabase.js` — the value is already fetched.
+
+Never add an `UPDATE` policy on `user_roles` that lets a user write their own row: RLS is
+per-row, not per-column, so it would let anyone set `role='Admin'` with the anon key. CCP uses a
+`security definer` function for the `last_seen` heartbeat instead.
 
 ## Environment variables
 

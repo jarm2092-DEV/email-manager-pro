@@ -1,4 +1,4 @@
-import { requireUser, missingEnv, methodNotAllowed } from './_supabase.js';
+import { requireUser, getProfile, missingEnv, methodNotAllowed } from './_supabase.js';
 
 const MAX_FIELD = 4000;
 const MAX_NOTES = 50000;
@@ -18,6 +18,7 @@ export default async function handler(req, res) {
   const user = await requireUser(req, res);
   if (!user) return;
 
+  const profile = await getProfile(req, user);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
 
   // Whitelist and cap every field — the flow writes straight into a SharePoint list.
@@ -29,9 +30,11 @@ export default async function handler(req, res) {
     fecha: clean(body.fecha, 64) || new Date().toISOString(),
     estado: clean(body.estado, MAX_FIELD),
     notas: clean(body.notas, MAX_NOTES),
-    // Who actually pushed the row. The shared Supabase account is the only
-    // identity we have, but it beats nothing in the audit trail.
-    enviado_por: clean(user.email, MAX_FIELD),
+    // Outlook runs on one shared tenant account, so the Supabase user is the
+    // only real identity. Names come from CCP's user_roles table.
+    enviado_por: clean(profile.displayName || user.email, MAX_FIELD),
+    enviado_por_email: clean(user.email, MAX_FIELD),
+    rol: clean(profile.role, 64),
   };
 
   if (!payload.notas && !payload.estado) {

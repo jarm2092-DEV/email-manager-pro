@@ -19,10 +19,16 @@ En cada uno de los dos flows (lectura de proyectos y escritura de seguimiento):
 
 No pegues las URLs nuevas en ningún archivo del repo. Van directo a Vercel en el paso 3.
 
-### 2. Crear los usuarios en Supabase
+### 2. Reusar el Supabase de CCP
 
-Cada persona del equipo necesita su propio usuario (Authentication → Users). El add-in solo usa
-Supabase para identidad; no lee ni escribe tablas.
+No hay que crear usuarios: este add-in usa **el mismo proyecto de Supabase que CCP**, con las
+mismas cuentas y la misma tabla `user_roles`. Quien ya entra a CCP entra aquí con lo mismo.
+
+De **Settings → API** del proyecto saca el **Project URL** y la **anon public key** (son las que
+ya están en `auth.js` de CCP; la anon key es pública por diseño).
+
+El add-in solo *lee* `user_roles` para saber el `display_name` y el rol de quien firma las notas.
+No escribe nada en Supabase.
 
 ### 3. Desplegar en Vercel
 
@@ -51,7 +57,8 @@ Abre `https://TU-DOMINIO/sp-test.html`:
 ### 5. Instalar el add-in
 
 Carga `public/manifest.xml` en Outlook (sideload). Cada persona entra una vez en la pestaña
-**⚙ Config** con su usuario de Supabase; la sesión se renueva sola.
+**⚙ Config** con su usuario de CCP; la sesión se renueva sola y las notas se firman con su
+`display_name`.
 
 ## Cómo está protegido
 

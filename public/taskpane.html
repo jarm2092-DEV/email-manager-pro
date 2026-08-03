@@ -332,6 +332,7 @@ const CAT_NOTAS='EMP Notas';
 const API_PROJECTS='/api/projects';
 const API_SYNC='/api/sync';
 const API_CONFIG='/api/config';
+const API_ME='/api/me';
 let spSyncing=false;
 let spProjects=[];  // Projects loaded from SharePoint (kept in memory only)
 let selectedColor='accent',mailItem=null,customProperties=null,officeReady=false;
@@ -341,10 +342,11 @@ let sbConfig=null,sbSession=null;
 
 function lsGet(k,fb){try{const v=localStorage.getItem(STORAGE_PREFIX+k);return v?JSON.parse(v):fb}catch{return fb}}
 function lsSet(k,v){try{localStorage.setItem(STORAGE_PREFIX+k,JSON.stringify(v))}catch{}}
-// Manual name wins; otherwise fall back to the signed-in Supabase user.
+// Manual name wins; otherwise the display_name CCP already has for this user.
 function getAuthor(){
   const manual=lsGet('author','');
   if(manual)return manual;
+  if(sbSession&&sbSession.displayName)return sbSession.displayName;
   if(sbSession&&sbSession.email)return sbSession.email.split('@')[0];
   return 'Anónimo';
 }
@@ -439,6 +441,7 @@ Office.onReady(function(info){
     loadCustomProperties(function(){renderAll();updateHeaderTags()});
     try{Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged,onItemChanged)}catch(e){}
     ensureMasterCategory();
+    if(isSignedIn()&&!sbSession.displayName)loadProfile();
     loadProjectsFromSP(false);  // Silent load on startup
   }else{document.getElementById('emailSubject').textContent='Vista previa';renderAll()}
 });
@@ -812,6 +815,18 @@ function signOut(silent){
   renderAuth();renderProjectSearch();
   if(!silent)showToast('Sesión cerrada');
 }
+// Pulls display_name / role from CCP's user_roles so notes are signed with the
+// same name the rest of the suite shows.
+async function loadProfile(){
+  try{
+    const me=await apiFetch(API_ME,{method:'GET'});
+    sbSession.displayName=me.displayName||'';
+    sbSession.role=me.role||null;
+    lsSet('session',sbSession);
+    renderAuth();renderNotes();
+  }catch(e){}
+}
+
 async function doSignIn(){
   const em=document.getElementById('sbEmail').value.trim();
   const pw=document.getElementById('sbPassword').value;
@@ -821,6 +836,7 @@ async function doSignIn(){
     await signIn(em,pw);
     document.getElementById('sbPassword').value='';
     renderAuth();showToast('Conectado como '+(sbSession.email||em));
+    loadProfile();
     loadProjectsFromSP(false);
   }catch(e){showToast(e.message,true)}
   btn.disabled=false;btn.textContent='Entrar';
@@ -831,7 +847,7 @@ function renderAuth(){
   if(isSignedIn()){
     box.innerHTML=`<div class="auth-status">
         <span class="auth-dot"></span>
-        <span class="item-text">Conectado como <strong>${esc(sbSession.email||'usuario')}</strong></span>
+        <span class="item-text">Conectado como <strong>${esc(sbSession.displayName||sbSession.email||'usuario')}</strong>${sbSession.role?' · '+esc(sbSession.role):''}</span>
         <button class="btn btn-ghost btn-sm" onclick="signOut()">Salir</button>
       </div>`;
   }else{
