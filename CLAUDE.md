@@ -112,8 +112,11 @@ this public repo. Those signatures are still valid:
 
 | Old flow (trigger GUID) | Exposure | Status |
 |---|---|---|
-| `6bd81083debf4e7a8100cd389d9cb8e1` | Read: anyone can list the SharePoint projects | **open** — flow not located in the portal |
-| `9307f259fdeb4e529b3fd0641f55c8d2` | Write: anyone can create rows in the tracking list | **open** until turned off |
+| `6bd81083debf4e7a8100cd389d9cb8e1` | Read: anyone can list the SharePoint projects | **open** — flow never located in the portal |
+| `9307f259fdeb4e529b3fd0641f55c8d2` | Write: anyone could create rows in the tracking list | closed 2026-08-03 — flow turned off |
+
+The write path is closed. What remains is read-only exposure of the project list (codes and
+addresses) to anyone who digs the URL out of this repo's history.
 
 Rotating the client-side code does not help here: the exposure is the flow endpoint itself, and
 it stays open until each flow is turned off or deleted. Power Automate cannot search flows by
@@ -125,8 +128,8 @@ Two ways to locate a flow when only the trigger GUID is known:
 2. POST `{}` to the leaked URL, then look for the flow whose 28-day run history shows a run
    from seconds ago.
 
-The write flow is the one that matters more — it accepts unauthenticated writes. Turn it off as
-soon as the replacement (`850a70cb…`) is confirmed working.
+Replacement flows in use since 2026-08-03: `cad3ffdc…` for reads, `850a70cb…` for writes. Both
+are reached only through the Vercel functions.
 
 ## Known issues / backlog
 
