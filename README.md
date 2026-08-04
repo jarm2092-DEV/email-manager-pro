@@ -43,7 +43,7 @@ npx vercel deploy --prod
 
 Repite los `env add` para `preview` si vas a usar despliegues de preview.
 
-Si el dominio que asigna Vercel no es `email-manager-pro.vercel.app`, actualiza las seis URLs
+Si el dominio que asigna Vercel no es `email-manager-pro-seven.vercel.app`, actualiza las seis URLs
 de `public/manifest.xml` antes de repartirlo.
 
 ### 4. Verificar que quedó protegido

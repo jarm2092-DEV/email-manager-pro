@@ -15,3 +15,5 @@ bootstrap-proyecto-email.md
 .env
 .env.local
 config.local.js
+
+.vercel

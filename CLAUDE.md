@@ -6,7 +6,7 @@ field to individual emails, plus sync to SharePoint through Power Automate.
 ## Repo
 
 - GitHub: https://github.com/jarm2092-DEV/email-manager-pro (public, branch `main`)
-- Hosted on Vercel: `https://email-manager-pro.vercel.app` (statics in `public/`, functions in `api/`)
+- Hosted on Vercel: `https://email-manager-pro-seven.vercel.app` (statics in `public/`, functions in `api/`)
 - No build step and no dependencies. Plain HTML + inline CSS/JS, plus four Node serverless
   functions. Pushing to `main` deploys.
 
