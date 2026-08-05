@@ -202,6 +202,16 @@
     .event-input{flex:1;padding:8px 10px;background:var(--bg-input);padding-right:8px;}
     .event-input::-webkit-calendar-picker-indicator{filter:invert(0.8);cursor:pointer}
     
+    .gate{position:fixed;inset:0;z-index:500;background:var(--bg-primary);display:none;align-items:center;justify-content:center;padding:24px}
+    .gate.visible{display:flex}
+    .gate-box{width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px;text-align:center}
+    .gate-logo{width:48px;height:48px;margin:0 auto 4px;background:linear-gradient(135deg,var(--accent),#9333ea);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 6px 18px rgba(99,102,241,0.35)}
+    .gate-title{font-family:'Outfit',sans-serif;font-size:18px;font-weight:600}
+    .gate-sub{font-size:12px;color:var(--text-muted);margin-bottom:6px;line-height:1.5}
+    .gate-msg{font-size:12px;min-height:18px;color:var(--danger)}
+    .gate-msg.info{color:var(--text-muted)}
+    #gateSkip{align-self:center;color:var(--text-muted)}
+
     .match-banner{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-radius:var(--radius);margin-bottom:16px;font-size:12px;line-height:1.5;animation:fadeIn 0.3s ease}
     .match-banner .match-text{flex:1}
     .match-banner.auto{background:var(--success-subtle);border:1px solid rgba(16,185,129,0.3);color:var(--success)}
@@ -222,6 +232,19 @@
   </style>
 </head>
 <body>
+<!-- Puerta de entrada: sin sesión no se ve el add-in -->
+<div class="gate" id="authGate">
+  <div class="gate-box">
+    <div class="gate-logo">📋</div>
+    <div class="gate-title">Email Manager Pro</div>
+    <div class="gate-sub">Entra con tu usuario de CCP para cargar proyectos y responsables.</div>
+    <input type="email" class="text-input" id="gateEmail" placeholder="Correo" autocomplete="username" onkeydown="gateKey(event)"/>
+    <input type="password" class="text-input" id="gatePassword" placeholder="Contraseña" autocomplete="current-password" onkeydown="gateKey(event)"/>
+    <button class="btn btn-primary" id="gateBtn" onclick="doGateSignIn()">Entrar</button>
+    <div class="gate-msg" id="gateMsg"></div>
+    <button class="btn btn-ghost btn-sm" id="gateSkip" onclick="hideGate(true)">Continuar sin conexión</button>
+  </div>
+</div>
 <div class="header">
   <div class="header-top">
     <div class="logo"><div class="logo-icon">📋</div><span class="logo-text">Email Manager Pro</span></div>
@@ -452,17 +475,24 @@ function loadCustomProperties(cb) {
 // ── Office Init ──
 sbSession=lsGet('session',null);
 
+// Sin sesión no se entra: la puerta se muestra antes que nada.
+function bootAuth(){
+  if(isSignedIn()){hideGate(false);renderAuth();if(!sbSession.displayName)loadProfile();return true}
+  showGate();
+  return false;
+}
+
 Office.onReady(function(info){
   if(info.host===Office.HostType.Outlook){
     officeReady=true;mailItem=Office.context.mailbox.item;
     document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
-    loadCustomProperties(function(){renderAll();updateHeaderTags();bootProjects()});
+    const signed=bootAuth();
+    loadCustomProperties(function(){renderAll();updateHeaderTags();if(signed)bootProjects()});
     try{Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged,onItemChanged)}catch(e){}
     ensureMasterCategory();
-    if(isSignedIn()&&!sbSession.displayName)loadProfile();
-  }else{document.getElementById('emailSubject').textContent='Vista previa';renderAll()}
+  }else{document.getElementById('emailSubject').textContent='Vista previa';bootAuth();renderAll()}
 });
-setTimeout(function(){if(!officeReady){document.getElementById('emailSubject').textContent='Vista previa';renderAll()}},3000);
+setTimeout(function(){if(!officeReady){document.getElementById('emailSubject').textContent='Vista previa';bootAuth();renderAll()}},3000);
 
 // Pinta con la copia en localStorage y solo va a la red si está vencida.
 function bootProjects(){
@@ -809,11 +839,14 @@ function isSignedIn(){return !!(sbSession&&sbSession.refresh_token)}
 
 async function signIn(email,password){
   const c=await loadSbConfig();
-  const r=await fetch(c.url+'/auth/v1/token?grant_type=password',{
-    method:'POST',
-    headers:{'Content-Type':'application/json',apikey:c.anonKey},
-    body:JSON.stringify({email,password})
-  });
+  let r;
+  try{
+    r=await fetch(c.url+'/auth/v1/token?grant_type=password',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',apikey:c.anonKey},
+      body:JSON.stringify({email,password})
+    });
+  }catch(e){throw new Error('No se pudo contactar el servidor de acceso. Revisa la conexión.')}
   const body=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(body.error_description||body.msg||body.message||'Credenciales inválidas');
   saveSession(body);
@@ -835,9 +868,11 @@ async function getToken(){
   return null;
 }
 function signOut(silent){
-  sbSession=null;spProjects=[];
+  sbSession=null;spProjects=[];lastMatch=null;
   try{localStorage.removeItem(STORAGE_PREFIX+'session')}catch(e){}
   renderAuth();renderProjectSearch();
+  if(document.getElementById('matchBanner'))document.getElementById('matchBanner').innerHTML='';
+  showGate(silent?'La sesión expiró, vuelve a entrar':null);
   if(!silent)showToast('Sesión cerrada');
 }
 // Pulls display_name / role from CCP's user_roles so notes are signed with the
@@ -852,21 +887,45 @@ async function loadProfile(){
   }catch(e){}
 }
 
-async function doSignIn(){
-  const em=document.getElementById('sbEmail').value.trim();
-  const pw=document.getElementById('sbPassword').value;
-  if(!em||!pw){showToast('Correo y contraseña requeridos',true);return}
-  const btn=document.getElementById('sbLoginBtn');btn.disabled=true;btn.textContent='Entrando...';
+// ── Puerta de entrada ──
+function showGate(msg){
+  const g=document.getElementById('authGate');if(!g)return;
+  g.classList.add('visible');
+  if(msg)setGateMsg(msg,false);
+  // Avisa temprano si el servidor no tiene las variables cargadas.
+  loadSbConfig().catch(function(e){setGateMsg(e.message)});
+  const em=document.getElementById('gateEmail');
+  if(em&&!em.value&&sbSession&&sbSession.email)em.value=sbSession.email;
+  setTimeout(function(){const f=document.getElementById(em&&em.value?'gatePassword':'gateEmail');if(f)f.focus()},50);
+}
+function hideGate(skipped){
+  const g=document.getElementById('authGate');if(g)g.classList.remove('visible');
+  if(skipped)showToast('Sin conexión: notas y estados funcionan, SharePoint no',true);
+}
+function setGateMsg(msg,isInfo){
+  const el=document.getElementById('gateMsg');if(!el)return;
+  el.textContent=msg||'';el.className='gate-msg'+(isInfo?' info':'');
+}
+function gateKey(e){if(e.key==='Enter')doGateSignIn()}
+async function doGateSignIn(){
+  const em=document.getElementById('gateEmail').value.trim();
+  const pw=document.getElementById('gatePassword').value;
+  if(!em||!pw){setGateMsg('Correo y contraseña requeridos');return}
+  const btn=document.getElementById('gateBtn');btn.disabled=true;btn.textContent='Entrando...';
+  setGateMsg('Verificando...',true);
   try{
     await signIn(em,pw);
-    document.getElementById('sbPassword').value='';
-    renderAuth();showToast('Conectado como '+(sbSession.email||em));
+    document.getElementById('gatePassword').value='';
+    setGateMsg('');
+    hideGate(false);
+    renderAuth();
+    showToast('Conectado como '+(sbSession.email||em));
     loadProfile();
-    loadProjectsFromSP(false);
-  }catch(e){showToast(e.message,true)}
+    bootProjects();
+  }catch(e){setGateMsg(e.message)}
   btn.disabled=false;btn.textContent='Entrar';
 }
-function authKeyDown(e){if(e.key==='Enter')doSignIn()}
+
 function renderAuth(){
   const box=document.getElementById('authBox');if(!box)return;
   if(isSignedIn()){
@@ -876,10 +935,8 @@ function renderAuth(){
         <button class="btn btn-ghost btn-sm" onclick="signOut()">Salir</button>
       </div>`;
   }else{
-    box.innerHTML=`<div class="input-row"><input type="email" class="text-input" id="sbEmail" placeholder="Correo" autocomplete="username" onkeydown="authKeyDown(event)"/></div>
-      <div class="input-row"><input type="password" class="text-input" id="sbPassword" placeholder="Contraseña" autocomplete="current-password" onkeydown="authKeyDown(event)"/>
-        <button class="btn btn-primary btn-sm" id="sbLoginBtn" onclick="doSignIn()">Entrar</button></div>
-      <div class="note-hint">Sin sesión, las notas y estados siguen funcionando: solo se desactiva SharePoint.</div>`;
+    box.innerHTML=`<div class="note-hint" style="margin-bottom:8px">Sin sesión no hay proyectos ni responsables. Las notas y estados siguen funcionando.</div>
+      <button class="btn btn-primary btn-sm" onclick="showGate()">Iniciar sesión</button>`;
   }
 }
 
@@ -1074,7 +1131,7 @@ function loadCachedProjects(){
 }
 
 async function loadProjectsFromSP(showMsg){
-  if(!isSignedIn()){if(showMsg)showToast('Inicia sesión en ⚙ Config',true);return}
+  if(!isSignedIn()){showGate();return}
   try{
     const data=await apiFetch(API_PROJECTS,{method:'GET'});
     spProjects=Array.isArray(data.projects)?data.projects:[];
@@ -1087,7 +1144,7 @@ async function loadProjectsFromSP(showMsg){
 
 async function sendToSharePoint(){
   if(spSyncing){showToast('Sincronizando...');return}
-  if(!isSignedIn()){showToast('Inicia sesión en ⚙ Config',true);return}
+  if(!isSignedIn()){showGate();return}
   const d=getEmailData();
   if(!d.notes||!d.notes.length){showToast('Sin datos para enviar',true);return}
   spSyncing=true;showToast('Enviando a SharePoint...');
