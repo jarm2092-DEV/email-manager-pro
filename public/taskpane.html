@@ -349,13 +349,16 @@
         <textarea class="note-textarea" id="bulkProjects" placeholder="CCP-0031 GOLF CLUB RD&#10;CCP-0045 MAIN ST" rows="4" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px"></textarea>
         <button class="btn btn-ghost btn-sm" onclick="bulkAddProjects()">Importar lista</button></div></div>
     <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px">
-      <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:rgba(248,113,113,0.3)" onclick="resetAll()">Restablecer todo</button></div>
+      <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:rgba(248,113,113,0.3)" onclick="resetAll()">Restablecer todo</button>
+      <div class="note-hint" id="buildStamp" style="margin-top:10px"></div></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
 const STORAGE_PREFIX='emp_';
+// Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
+const BUILD='2026-08-05 · etiquetas';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -487,7 +490,10 @@ Office.onReady(function(info){
     officeReady=true;mailItem=Office.context.mailbox.item;
     document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
     const signed=bootAuth();
-    loadCustomProperties(function(){renderAll();updateHeaderTags();if(signed)bootProjects()});
+    // Reconcilia las categorías de todo correo que ya traiga datos, no solo de
+    // los que se asignan ahora: si no, un correo etiquetado antes se queda sin
+    // categorías para siempre.
+    loadCustomProperties(function(){renderAll();updateHeaderTags();syncCategories();if(signed)bootProjects()});
     try{Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged,onItemChanged)}catch(e){}
     ensureMasterCategory();
   }else{document.getElementById('emailSubject').textContent='Vista previa';bootAuth();renderAll()}
@@ -505,7 +511,7 @@ function onItemChanged(){
   mailItem=Office.context.mailbox.item;if(!mailItem)return;
   document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
   customProperties=null;lastMatch=null;
-  loadCustomProperties(function(){renderAll();updateHeaderTags();runAutoMatch()})
+  loadCustomProperties(function(){renderAll();updateHeaderTags();syncCategories();runAutoMatch()})
 }
 
 // ── Categories ──
@@ -539,8 +545,9 @@ function findResponsableCat(name,cats){
   return cats.find(c=>c.toUpperCase()===n)||cats.find(c=>c.toUpperCase().indexOf(n)>=0)||null;
 }
 
-function syncCategories(oldProject,oldResponsable){
-  if(!mailItem||!mailItem.categories)return;
+function syncCategories(oldProject,oldResponsable,cb){
+  const done=function(applied,err){if(cb)cb(applied||[],err||null)};
+  if(!mailItem||!mailItem.categories){done([],'No hay correo abierto');return}
   try{
     const d=getEmailData();
     const hasNotas=d.notes&&d.notes.length>0;
@@ -550,7 +557,7 @@ function syncCategories(oldProject,oldResponsable){
       const respCat=findResponsableCat(d.responsable,cats);
       const oldRespCat=oldResponsable?findResponsableCat(oldResponsable,cats):null;
       mailItem.categories.getAsync(function(r){
-        if(r.status!==Office.AsyncResultStatus.Succeeded)return;
+        if(r.status!==Office.AsyncResultStatus.Succeeded){done([],'No se pudieron leer las categorías del correo');return}
         const cur=r.value.map(c=>c.displayName);
         const desired=[];
         if(hasNotas)desired.push(CAT_NOTAS);
@@ -561,33 +568,42 @@ function syncCategories(oldProject,oldResponsable){
         if(!hasNotas&&cur.indexOf(CAT_NOTAS)>=0)toRm.push(CAT_NOTAS);
         if(oldPid&&oldPid!==newPid&&cur.indexOf(oldPid)>=0)toRm.push(oldPid);
         if(oldRespCat&&oldRespCat!==respCat&&cur.indexOf(oldRespCat)>=0)toRm.push(oldRespCat);
-        const add=function(){if(toAdd.length)applyCategories(toAdd,cats)};
+        const add=function(){
+          if(!toAdd.length){done(desired.filter(c=>cur.indexOf(c)>=0));return}
+          applyCategories(toAdd,cats,function(err){done(err?[]:toAdd,err)});
+        };
         if(toRm.length)mailItem.categories.removeAsync(toRm,function(){add()});
         else add();
       });
     });
-  }catch(e){}
+  }catch(e){done([],e.message)}
 }
 
 // Office.js exige que la categoría esté en la lista maestra para poder
 // aplicarla. Así que se registra lo que falte, se aplica, y lo que acabamos de
 // crear se borra de la maestra: el correo queda etiquetado (sin color, porque
 // ya no está registrada) y la lista del buzón no crece con 468 proyectos.
-function applyCategories(names,cats){
+function applyCategories(names,cats,cb){
+  const done=function(err){if(cb)cb(err||null)};
   const missing=names.filter(n=>cats.indexOf(n)<0);
   const temporary=missing.filter(n=>n!==CAT_NOTAS);
   const applyAndCleanup=function(){
     try{
       mailItem.categories.addAsync(names,function(r){
-        if(r.status!==Office.AsyncResultStatus.Succeeded){console.warn('EMP: no se pudo etiquetar',r.error);return}
-        if(!temporary.length)return;
+        if(r.status!==Office.AsyncResultStatus.Succeeded){
+          const msg=(r.error&&r.error.message)||'Outlook rechazó las categorías';
+          console.warn('EMP: no se pudo etiquetar',r.error);
+          done(msg);return;
+        }
+        if(!temporary.length){done();return}
         try{
           Office.context.mailbox.masterCategories.removeAsync(temporary,function(){
             masterCats=(masterCats||[]).filter(c=>temporary.indexOf(c)<0);
+            done();
           });
-        }catch(e){}
+        }catch(e){done()}
       });
-    }catch(e){}
+    }catch(e){done(e.message)}
   };
   if(!missing.length){applyAndCleanup();return}
   try{
@@ -595,12 +611,23 @@ function applyCategories(names,cats){
       missing.map(n=>({displayName:n,color:Office.MailboxEnums.CategoryColor.Preset7})),
       function(r){
         if(r.status===Office.AsyncResultStatus.Succeeded)masterCats=(masterCats||[]).concat(missing);
+        else console.warn('EMP: no se pudo registrar en la lista maestra',r.error);
         applyAndCleanup();
       }
     );
   }catch(e){applyAndCleanup()}
 }
-function manualSyncTags(){masterCats=null;syncCategories();showToast('Etiquetas sincronizadas')}
+// Botón 🏷: red de seguridad cuando el automático no aplicó. Vuelve a leer la
+// lista maestra por si cambió y dice qué hizo, en vez de un "listo" a ciegas.
+function manualSyncTags(){
+  masterCats=null;
+  syncCategories(undefined,undefined,function(applied,err){
+    if(err){showToast(err,true);return}
+    const d=getEmailData();
+    if(!d.project&&!d.responsable&&!(d.notes&&d.notes.length)){showToast('Nada que etiquetar en este correo',true);return}
+    showToast(applied.length?'Etiquetas: '+applied.join(', '):'Ya estaba etiquetado');
+  });
+}
 
 // ── Render ──
 function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();renderAuth();updateSummary()}
@@ -680,6 +707,8 @@ function updateHeaderTags(){
 }
 function renderSettings() {
   document.getElementById('authorName').value = lsGet('author', '');
+  const stamp = document.getElementById('buildStamp');
+  if (stamp) stamp.textContent = 'Versión ' + BUILD;
   
   // Render Colors
   document.getElementById('colorSelector').innerHTML = COLORS.map(c => 
