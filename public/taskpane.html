@@ -341,13 +341,6 @@
       <div class="input-row"><input type="text" class="text-input" id="newStatusName" placeholder="Nombre del estado"/>
         <div class="color-selector" id="colorSelector"></div>
         <button class="btn btn-primary btn-sm" onclick="addStatus()">+</button></div></div>
-    <div class="settings-section"><div class="settings-title">📁 Proyectos</div>
-      <div class="editable-list" id="projectList"></div>
-      <div class="input-row"><input type="text" class="text-input" id="newProjectName" placeholder="Nombre del proyecto"/>
-        <button class="btn btn-primary btn-sm" onclick="addProject()">+</button></div>
-      <div style="margin-top:8px"><div class="section-label section-label-standalone">Pegar lista de proyectos (uno por línea)</div>
-        <textarea class="note-textarea" id="bulkProjects" placeholder="CCP-0031 GOLF CLUB RD&#10;CCP-0045 MAIN ST" rows="4" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px"></textarea>
-        <button class="btn btn-ghost btn-sm" onclick="bulkAddProjects()">Importar lista</button></div></div>
     <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px">
       <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:rgba(248,113,113,0.3)" onclick="resetAll()">Restablecer todo</button>
       <div class="note-hint" id="buildStamp" style="margin-top:10px"></div></div>
@@ -358,7 +351,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05 · etiquetas';
+const BUILD='2026-08-05b · diagnóstico';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -583,39 +576,55 @@ function syncCategories(oldProject,oldResponsable,cb){
 // aplicarla. Así que se registra lo que falte, se aplica, y lo que acabamos de
 // crear se borra de la maestra: el correo queda etiquetado (sin color, porque
 // ya no está registrada) y la lista del buzón no crece con 468 proyectos.
+function errInfo(err){
+  if(!err)return{name:'',message:'',code:''};
+  return{name:err.name||'',message:err.message||'',code:err.code||''};
+}
 function applyCategories(names,cats,cb){
   const done=function(err){if(cb)cb(err||null)};
   const missing=names.filter(n=>cats.indexOf(n)<0);
   const temporary=missing.filter(n=>n!==CAT_NOTAS);
-  const applyAndCleanup=function(){
+  let masterErr=null;
+
+  const cleanup=function(){
+    if(!temporary.length){done();return}
+    try{
+      Office.context.mailbox.masterCategories.removeAsync(temporary,function(){
+        masterCats=(masterCats||[]).filter(c=>temporary.indexOf(c)<0);
+        done();
+      });
+    }catch(e){done()}
+  };
+  // Registrar en la lista maestra y aplicar acto seguido puede llegar antes de
+  // que el buzón haya propagado el alta, y ahí Outlook rechaza la categoría.
+  // Por eso un reintento tardío antes de darlo por fallido.
+  const apply=function(isRetry){
     try{
       mailItem.categories.addAsync(names,function(r){
-        if(r.status!==Office.AsyncResultStatus.Succeeded){
-          const msg=(r.error&&r.error.message)||'Outlook rechazó las categorías';
-          console.warn('EMP: no se pudo etiquetar',r.error);
-          done(msg);return;
-        }
-        if(!temporary.length){done();return}
-        try{
-          Office.context.mailbox.masterCategories.removeAsync(temporary,function(){
-            masterCats=(masterCats||[]).filter(c=>temporary.indexOf(c)<0);
-            done();
-          });
-        }catch(e){done()}
+        if(r.status===Office.AsyncResultStatus.Succeeded){cleanup();return}
+        const info=errInfo(r.error);
+        console.warn('EMP: no se pudo etiquetar',{intento:names,reintento:!!isRetry,error:info,altaMaestra:masterErr,maestra:cats});
+        if(!isRetry&&missing.length){setTimeout(function(){apply(true)},1200);return}
+        done((info.message||info.name||'Outlook rechazó las categorías')+(masterErr?' · lista maestra: '+masterErr:''));
       });
     }catch(e){done(e.message)}
   };
-  if(!missing.length){applyAndCleanup();return}
+
+  if(!missing.length){apply(false);return}
   try{
     Office.context.mailbox.masterCategories.addAsync(
       missing.map(n=>({displayName:n,color:Office.MailboxEnums.CategoryColor.Preset7})),
       function(r){
-        if(r.status===Office.AsyncResultStatus.Succeeded)masterCats=(masterCats||[]).concat(missing);
-        else console.warn('EMP: no se pudo registrar en la lista maestra',r.error);
-        applyAndCleanup();
+        if(r.status===Office.AsyncResultStatus.Succeeded){masterCats=(masterCats||[]).concat(missing)}
+        else{
+          const info=errInfo(r.error);
+          masterErr=info.message||info.name||'rechazada';
+          console.warn('EMP: no se pudo registrar en la lista maestra',{intento:missing,error:info});
+        }
+        apply(false);
       }
     );
-  }catch(e){applyAndCleanup()}
+  }catch(e){masterErr=e.message;apply(false)}
 }
 // Botón 🏷: red de seguridad cuando el automático no aplicó. Vuelve a leer la
 // lista maestra por si cambió y dice qué hizo, en vez de un "listo" a ciegas.
@@ -724,23 +733,6 @@ function renderSettings() {
       <button class="remove-btn" onclick="removeStatus(${i})">✕</button>
     </div>
   `).join('');
-  
-  // Render Projects
-  const projects = getProjects();
-  if (!projects.length) {
-    document.getElementById('projectList').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-text" style="font-size:11px">Agrega proyectos o pega una lista.</div>
-      </div>
-    `;
-  } else {
-    document.getElementById('projectList').innerHTML = projects.map((p, i) => `
-      <div class="editable-item">
-        <span class="item-text">${esc(p)}</span>
-        <button class="remove-btn" onclick="removeProject(${i})">✕</button>
-      </div>
-    `).join('');
-  }
 }
 
 // ── Project Dropdown ──
@@ -886,17 +878,6 @@ function saveAuthorName(){const n=document.getElementById('authorName').value.tr
 function pickColor(n){selectedColor=n;renderSettings()}
 function addStatus(){const inp=document.getElementById('newStatusName'),n=inp.value.trim();if(!n)return;const ss=getStatuses();if(ss.some(s=>s.name.toLowerCase()===n.toLowerCase())){showToast('Ya existe',true);return}ss.push({name:n,color:selectedColor});lsSet('statuses',ss);inp.value='';renderSettings();renderStatuses();showToast('Estado agregado')}
 function removeStatus(i){const ss=getStatuses();ss.splice(i,1);lsSet('statuses',ss);renderSettings();renderStatuses()}
-function addProject(){
-  const inp=document.getElementById('newProjectName'),n=inp.value.trim().toUpperCase();if(!n)return;
-  const pp=getProjects();if(pp.some(p=>p.toUpperCase()===n)){showToast('Ya existe',true);return}
-  pp.push(n);pp.sort((a,b)=>a.localeCompare(b));lsSet('projects',pp);inp.value='';renderSettings();renderProjectSearch();showToast('Proyecto agregado')
-}
-function removeProject(i){const pp=getProjects();pp.splice(i,1);lsSet('projects',pp);renderSettings();renderProjectSearch()}
-function bulkAddProjects(){
-  const ta=document.getElementById('bulkProjects'),ls=ta.value.split('\n').map(l=>l.trim().toUpperCase()).filter(l=>l);if(!ls.length)return;
-  const pp=getProjects();let a=0;ls.forEach(n=>{if(!pp.some(p=>p.toUpperCase()===n)){pp.push(n);a++}});
-  pp.sort((x,y)=>x.localeCompare(y));lsSet('projects',pp);ta.value='';renderSettings();renderProjectSearch();showToast(a+' proyecto(s) importado(s)')
-}
 function resetAll(){if(!confirm('¿Borrar configuración local?'))return;localStorage.removeItem(STORAGE_PREFIX+'author');localStorage.removeItem(STORAGE_PREFIX+'statuses');localStorage.removeItem(STORAGE_PREFIX+'projects');renderAll();showToast('Restablecido')}
 function refreshData(){loadCustomProperties(function(){renderAll();updateHeaderTags()});showToast('Actualizado')}
 
