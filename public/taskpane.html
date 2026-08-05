@@ -354,7 +354,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05d · diagnóstico en panel';
+const BUILD='2026-08-05e · etiquetado por partes';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -522,15 +522,24 @@ function ensureMasterCategory(){
 }
 // Lista maestra del buzón, en caché: se consulta para saber qué categorías de
 // responsable ya existen y qué hay que registrar antes de aplicar.
-let masterCats=null;
+// getAsync puede fallar aunque el buzón tenga categorías de sobra, así que hay
+// que distinguir "vacía" de "no la pude leer": tratarlas igual bloquea el
+// etiquetado de categorías que existen y se aplicarían sin problema.
+let masterCats=null,masterCatsKnown=false;
 function getMasterCats(cb){
-  if(masterCats){cb(masterCats);return}
+  if(masterCats){cb(masterCats,masterCatsKnown);return}
   try{
     Office.context.mailbox.masterCategories.getAsync(function(r){
-      masterCats=(r.status===Office.AsyncResultStatus.Succeeded)?r.value.map(c=>c.displayName):[];
-      cb(masterCats);
+      const ok=r.status===Office.AsyncResultStatus.Succeeded;
+      if(!ok)console.warn('EMP: no se pudo leer la lista maestra',errInfo(r.error));
+      masterCats=ok?r.value.map(c=>c.displayName):[];
+      masterCatsKnown=ok;
+      cb(masterCats,ok);
     });
-  }catch(e){masterCats=[];cb(masterCats)}
+  }catch(e){
+    console.warn('EMP: masterCategories.getAsync lanzó',e.message);
+    masterCats=[];masterCatsKnown=false;cb(masterCats,false);
+  }
 }
 // El responsable se etiqueta con una categoría que ya exista en el buzón:
 // primero por nombre exacto, si no, la que lo contenga (p. ej. "Resp · Melissa").
@@ -550,8 +559,10 @@ function syncCategories(oldProject,oldResponsable,cb){
     const newPid=extractProjectId(d.project);
     const oldPid=oldProject!==undefined?extractProjectId(oldProject):null;
     getMasterCats(function(cats){
-      const respCat=findResponsableCat(d.responsable,cats);
-      const oldRespCat=oldResponsable?findResponsableCat(oldResponsable,cats):null;
+      // Si el responsable no tiene categoría en el buzón se crea con su nombre:
+      // son seis personas, no 468 proyectos, así que esa lista sí puede quedarse.
+      const respCat=findResponsableCat(d.responsable,cats)||(d.responsable?String(d.responsable).trim().toUpperCase():null);
+      const oldRespCat=oldResponsable?(findResponsableCat(oldResponsable,cats)||String(oldResponsable).trim().toUpperCase()):null;
       mailItem.categories.getAsync(function(r){
         if(r.status!==Office.AsyncResultStatus.Succeeded){done([],'No se pudieron leer las categorías del correo');return}
         const cur=r.value.map(c=>c.displayName);
@@ -564,9 +575,12 @@ function syncCategories(oldProject,oldResponsable,cb){
         if(!hasNotas&&cur.indexOf(CAT_NOTAS)>=0)toRm.push(CAT_NOTAS);
         if(oldPid&&oldPid!==newPid&&cur.indexOf(oldPid)>=0)toRm.push(oldPid);
         if(oldRespCat&&oldRespCat!==respCat&&cur.indexOf(oldRespCat)>=0)toRm.push(oldRespCat);
+        // EMP Notas y la del responsable se quedan registradas; la del proyecto
+        // se crea, se aplica y se borra de la lista maestra.
+        const keep=[CAT_NOTAS,respCat].filter(Boolean);
         const add=function(){
           if(!toAdd.length){done(desired.filter(c=>cur.indexOf(c)>=0));return}
-          applyCategories(toAdd,cats,function(err,applied){done(applied,err)});
+          applyCategories(toAdd,keep,function(err,applied){done(applied,err)});
         };
         if(toRm.length)mailItem.categories.removeAsync(toRm,function(){add()});
         else add();
@@ -584,63 +598,82 @@ function errInfo(err){
   return{name:err.name||'',message:err.message||'',code:err.code||''};
 }
 let elevatedWarned=false;
-function applyCategories(names,cats,cb){
+// Se aplica de a una categoría. Aplicar una que ya existe en el buzón funciona
+// sin permisos especiales, aunque no hayamos podido leer la lista maestra; y
+// como addAsync es todo-o-nada, una categoría inexistente en el lote tumbaría
+// también a las buenas. Solo si aplicar falla se intenta registrarla.
+function applyCategories(names,keep,cb){
   const done=function(err,applied){if(cb)cb(err||null,applied||[])};
-  const missing=names.filter(n=>cats.indexOf(n)<0);
-  const temporary=missing.filter(n=>n!==CAT_NOTAS);
-  let masterErr=null;
+  const applied=[],created=[];
+  let lastErr=null,i=0;
 
-  const cleanup=function(applied){
-    if(!temporary.length){done(null,applied);return}
+  const finish=function(){
+    // Lo que registramos y no debe quedarse (la del proyecto) se borra: el
+    // correo conserva la etiqueta y la lista del buzón no crece.
+    const temp=created.filter(n=>keep.indexOf(n)<0);
+    const end=function(){done(applied.length?null:lastErr,applied)};
+    if(!temp.length){end();return}
     try{
-      Office.context.mailbox.masterCategories.removeAsync(temporary,function(){
-        masterCats=(masterCats||[]).filter(c=>temporary.indexOf(c)<0);
-        done(null,applied);
+      Office.context.mailbox.masterCategories.removeAsync(temp,function(){
+        masterCats=(masterCats||[]).filter(c=>temp.indexOf(c)<0);
+        end();
       });
-    }catch(e){done(null,applied)}
+    }catch(e){end()}
   };
-  // Registrar en la lista maestra y aplicar acto seguido puede llegar antes de
-  // que el buzón haya propagado el alta, y ahí Outlook rechaza la categoría.
-  // Por eso un reintento tardío antes de darlo por fallido.
-  const apply=function(list,isRetry){
-    if(!list.length){done(masterErr?'Sin permiso para crear categorías':null,[]);return}
+
+  const createThenRetry=function(name,after){
     try{
-      mailItem.categories.addAsync(list,function(r){
-        if(r.status===Office.AsyncResultStatus.Succeeded){cleanup(list);return}
-        const info=errInfo(r.error);
-        console.warn('EMP: no se pudo etiquetar',{intento:list,reintento:!!isRetry,error:info,altaMaestra:masterErr,maestra:cats});
-        // Crear categorías exige ReadWriteMailbox; el manifest pide ReadWriteItem.
-        // Si el alta falló, se aplica al menos lo que ya existe en el buzón —
-        // que es el caso del responsable — en vez de perderlo todo.
-        const existing=list.filter(n=>cats.indexOf(n)>=0);
-        if(masterErr&&existing.length&&existing.length<list.length){
-          if(!elevatedWarned){
-            elevatedWarned=true;
-            showToast('Sin permiso para crear la etiqueta del proyecto; solo se aplican las que ya existen',true);
+      Office.context.mailbox.masterCategories.addAsync(
+        [{displayName:name,color:Office.MailboxEnums.CategoryColor.Preset7}],
+        function(r){
+          if(r.status!==Office.AsyncResultStatus.Succeeded){
+            const info=errInfo(r.error);
+            lastErr=info.message||info.name||'No se pudo registrar la categoría';
+            console.warn('EMP: no se pudo registrar en la lista maestra',{categoria:name,error:info});
+            if(!elevatedWarned){
+              elevatedWarned=true;
+              showToast('Outlook no deja crear categorías nuevas: '+lastErr,true);
+            }
+            after(false);return;
           }
-          apply(existing,true);return;
+          created.push(name);
+          masterCats=(masterCats||[]).concat([name]);
+          // Un respiro para que el buzón propague el alta antes de aplicarla.
+          setTimeout(function(){
+            try{
+              mailItem.categories.addAsync([name],function(r2){
+                if(r2.status!==Office.AsyncResultStatus.Succeeded)lastErr=errInfo(r2.error).message||'rechazada tras crearla';
+                after(r2.status===Office.AsyncResultStatus.Succeeded);
+              });
+            }catch(e){lastErr=e.message;after(false)}
+          },400);
         }
-        if(!isRetry&&!masterErr&&missing.length){setTimeout(function(){apply(list,true)},1200);return}
-        done((info.message||info.name||'Outlook rechazó las categorías')+(masterErr?' · lista maestra: '+masterErr:''),[]);
-      });
-    }catch(e){done(e.message,[])}
+      );
+    }catch(e){
+      lastErr=e.message;
+      if(!elevatedWarned){elevatedWarned=true;showToast('Outlook no deja crear categorías nuevas: '+e.message,true)}
+      after(false);
+    }
   };
 
-  if(!missing.length){apply(names,false);return}
-  try{
-    Office.context.mailbox.masterCategories.addAsync(
-      missing.map(n=>({displayName:n,color:Office.MailboxEnums.CategoryColor.Preset7})),
-      function(r){
-        if(r.status===Office.AsyncResultStatus.Succeeded){masterCats=(masterCats||[]).concat(missing)}
-        else{
-          const info=errInfo(r.error);
-          masterErr=info.message||info.name||'rechazada';
-          console.warn('EMP: no se pudo registrar en la lista maestra',{intento:missing,error:info});
-        }
-        apply(names,false);
-      }
-    );
-  }catch(e){masterErr=e.message;apply(names,false)}
+  const applyOne=function(name,after){
+    try{
+      mailItem.categories.addAsync([name],function(r){
+        if(r.status===Office.AsyncResultStatus.Succeeded){after(true);return}
+        const info=errInfo(r.error);
+        lastErr=info.message||info.name||'Outlook rechazó la categoría';
+        console.warn('EMP: no se pudo aplicar, intento registrarla',{categoria:name,error:info});
+        createThenRetry(name,after);
+      });
+    }catch(e){lastErr=e.message;after(false)}
+  };
+
+  const next=function(){
+    if(i>=names.length){finish();return}
+    const name=names[i++];
+    applyOne(name,function(ok){if(ok)applied.push(name);next()});
+  };
+  next();
 }
 // Botón 🏷: red de seguridad cuando el automático no aplicó. Vuelve a leer la
 // lista maestra por si cambió y dice qué hizo, en vez de un "listo" a ciegas.
@@ -759,20 +792,21 @@ function renderDiag(){
   if(!officeReady||!mailItem){box.innerHTML='<div class="note-hint">Sin Outlook: abre el panel dentro de un correo.</div>';return}
   const d=getEmailData();
   masterCats=null;
-  getMasterCats(function(cats){
+  getMasterCats(function(cats,known){
     const resp=findResponsableCat(d.responsable,cats);
     const pid=extractProjectId(d.project);
     mailItem.categories.getAsync(function(r){
       const cur=(r.status===Office.AsyncResultStatus.Succeeded)?r.value.map(c=>c.displayName):[];
       const row=function(k,v){return '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted);min-width:120px">'+esc(k)+'</span><span style="flex:1">'+esc(v)+'</span></div>'};
+      const lista=known?(cats.length?cats.join(', '):'vacía de verdad'):'NO SE PUDO LEER (la API falló; el buzón puede tener categorías igual)';
       box.innerHTML=
-        row('Lista maestra ('+cats.length+')',cats.length?cats.join(', '):'vacía')+
+        row('Lista maestra',lista)+
         row('En este correo',cur.length?cur.join(', '):'ninguna')+
         row('Proyecto',d.project||'—')+
         row('Responsable',d.responsable||'—')+
-        row('Categoría de responsable',resp?resp+' (existe)':(d.responsable?'no existe en el buzón':'—'))+
-        row('Categoría de proyecto',pid?(cats.indexOf(pid)>=0?pid+' (existe)':pid+' (hay que crearla)'):'—')+
-        '<div class="note-hint" style="margin-top:8px">Si la lista maestra está vacía, el add-in solo puede etiquetar creando categorías, y eso exige el permiso ReadWriteMailbox en el manifest.</div>';
+        row('Categoría de responsable',resp?resp+' (existe)':(d.responsable?(known?'no existe en el buzón':'se intentará aplicar igual'):'—'))+
+        row('Categoría de proyecto',pid?((known&&cats.indexOf(pid)>=0)?pid+' (existe)':pid+' (se intentará aplicar y, si no, crear)'):'—')+
+        '<div class="note-hint" style="margin-top:8px">Aplicar una categoría que ya existe funciona aunque la lista no se pueda leer. Crear una nueva es lo que puede requerir permiso elevado.</div>';
     });
   });
 }
