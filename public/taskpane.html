@@ -202,6 +202,14 @@
     .event-input{flex:1;padding:8px 10px;background:var(--bg-input);padding-right:8px;}
     .event-input::-webkit-calendar-picker-indicator{filter:invert(0.8);cursor:pointer}
     
+    .match-banner{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-radius:var(--radius);margin-bottom:16px;font-size:12px;line-height:1.5;animation:fadeIn 0.3s ease}
+    .match-banner .match-text{flex:1}
+    .match-banner.auto{background:var(--success-subtle);border:1px solid rgba(16,185,129,0.3);color:var(--success)}
+    .match-banner.suggest{background:var(--info-subtle);border:1px solid rgba(59,130,246,0.3);color:var(--info)}
+    .match-banner.ok{background:var(--bg-card);border:1px solid var(--border);color:var(--text-muted)}
+    .match-banner .match-options{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;width:100%}
+    .match-banner.suggest .match-options{flex-basis:100%}
+
     .auth-status{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm)}
     .auth-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success);flex-shrink:0}
 
@@ -235,6 +243,7 @@
 <div class="content">
   <!-- MAIN -->
   <div class="panel active" id="panel-main">
+    <div id="matchBanner"></div>
     <div class="summary-strip">
       <div class="summary-card"><div class="num" id="noteCount">0</div><div class="label">Notas</div></div>
       <div class="summary-card"><div class="num" id="currentStatusDisplay">—</div><div class="label">Estado</div></div>
@@ -334,8 +343,11 @@ const API_SYNC='/api/sync';
 const API_CONFIG='/api/config';
 const API_ME='/api/me';
 let spSyncing=false;
-let spProjects=[];  // Projects loaded from SharePoint (kept in memory only)
+// Rows from SharePoint: {id,title,address,street,city,zip,responsable,permiso,proceso,folio,ownerEmail}
+let spProjects=[];
+const PROJECTS_TTL=12*60*60*1000;  // localStorage copy is good for half a day
 let selectedColor='accent',mailItem=null,customProperties=null,officeReady=false;
+let lastMatch=null;  // result of the last automatic search, for the banner
 
 // ── Supabase session (shared team account, typed once per device) ──
 let sbConfig=null,sbSession=null;
@@ -351,12 +363,18 @@ function getAuthor(){
   return 'Anónimo';
 }
 function getStatuses(){return lsGet('statuses',DEFAULT_STATUSES)}
+function spTitles(){return spProjects.map(p=>p.title)}
 function getProjects(){
   // Merge localStorage projects + SharePoint projects (no duplicates)
   const local=lsGet('projects',[]);
   const merged=[...local];
-  spProjects.forEach(p=>{if(!merged.some(m=>m.toUpperCase()===p.toUpperCase()))merged.push(p)});
+  spTitles().forEach(t=>{if(!merged.some(m=>m.toUpperCase()===t.toUpperCase()))merged.push(t)});
   return merged.sort((a,b)=>a.localeCompare(b));
+}
+function findProjectRow(id){
+  if(!id)return null;
+  const wanted=String(id).toUpperCase();
+  return spProjects.find(p=>p.id===wanted)||null;
 }
 function extractProjectId(name){if(!name)return null;const m=name.match(/^[A-Za-z0-9]{2,5}-[A-Za-z0-9]{3,5}/);return m?m[0].toUpperCase():null}
 function splitProject(full){
@@ -438,19 +456,26 @@ Office.onReady(function(info){
   if(info.host===Office.HostType.Outlook){
     officeReady=true;mailItem=Office.context.mailbox.item;
     document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
-    loadCustomProperties(function(){renderAll();updateHeaderTags()});
+    loadCustomProperties(function(){renderAll();updateHeaderTags();bootProjects()});
     try{Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged,onItemChanged)}catch(e){}
     ensureMasterCategory();
     if(isSignedIn()&&!sbSession.displayName)loadProfile();
-    loadProjectsFromSP(false);  // Silent load on startup
   }else{document.getElementById('emailSubject').textContent='Vista previa';renderAll()}
 });
 setTimeout(function(){if(!officeReady){document.getElementById('emailSubject').textContent='Vista previa';renderAll()}},3000);
 
+// Pinta con la copia en localStorage y solo va a la red si está vencida.
+function bootProjects(){
+  const fresh=loadCachedProjects();
+  if(spProjects.length){renderProjectSearch();runAutoMatch()}
+  if(!fresh)loadProjectsFromSP(false);
+}
+
 function onItemChanged(){
   mailItem=Office.context.mailbox.item;if(!mailItem)return;
   document.getElementById('emailSubject').textContent=mailItem.subject||'Sin asunto';
-  customProperties=null;loadCustomProperties(function(){renderAll();updateHeaderTags()})
+  customProperties=null;lastMatch=null;
+  loadCustomProperties(function(){renderAll();updateHeaderTags();runAutoMatch()})
 }
 
 // ── Categories ──
@@ -858,6 +883,160 @@ function renderAuth(){
   }
 }
 
+// ── Emparejador correo ↔ proyecto ──
+// Pure function: no Office, no DOM. Se prueba en Node con casos reales.
+function normText(s){
+  return String(s||'')
+    .toUpperCase()
+    .replace(/FLORIDA/g,'FL')
+    .replace(/[.,;:#()\[\]{}"'`_]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function findAll(re,s){
+  const out=[],rx=new RegExp(re.source,re.flags.indexOf('g')<0?re.flags+'g':re.flags);
+  let m;while((m=rx.exec(s))!==null){out.push(m[0]);if(m.index===rx.lastIndex)rx.lastIndex++}
+  return out;
+}
+function dedupeRows(rows){
+  const seen={},out=[];
+  rows.forEach(r=>{if(!seen[r.id]){seen[r.id]=1;out.push(r)}});
+  return out;
+}
+function matchProject(subject,from,body,rows){
+  const none={signal:null,project:null,candidates:[]};
+  if(!rows||!rows.length)return none;
+  const subjectText=normText(subject);
+  const text=normText(subject+' '+(body||''));
+  const sender=String(from||'').toLowerCase().trim();
+  const result=function(signal,hits){
+    const list=dedupeRows(hits);
+    return{signal:signal,project:list.length===1?list[0]:null,candidates:list.length>1?list.slice(0,8):[]};
+  };
+
+  // 1. Código de proyecto — primero solo en el asunto, que es la señal más limpia.
+  const codeRe=/\b[A-Z]{2,5}-\d{3,5}\b/;
+  for(const scope of [subjectText,text]){
+    const codes=findAll(codeRe,scope);
+    if(codes.length){
+      const hits=rows.filter(r=>codes.indexOf(r.id)>=0);
+      if(hits.length)return result('código de proyecto',hits);
+    }
+  }
+  // 2. Número de permiso o de proceso (los correos de las ciudades).
+  const nums=findAll(/\b[A-Z]{1,4}-\d{4}-\d{3,8}-\d{2,6}\b/,text);
+  if(nums.length){
+    const hits=rows.filter(r=>(r.permiso&&nums.indexOf(r.permiso)>=0)||(r.proceso&&nums.indexOf(r.proceso)>=0));
+    if(hits.length)return result('número de permiso o proceso',hits);
+  }
+  // 3. Folio.
+  const folios=findAll(/\b\d{15,20}\b/,text);
+  if(folios.length){
+    const hits=rows.filter(r=>r.folio&&folios.indexOf(r.folio)>=0);
+    if(hits.length)return result('folio',hits);
+  }
+  // 4. Dirección. Se exige la calle completa para no confundir dos "16415".
+  const addrHits=rows.filter(function(r){
+    const st=normText(r.street);
+    return st.length>=8&&text.indexOf(st)>=0;
+  });
+  if(addrHits.length)return result('dirección',addrHits);
+  // 5. Correo del dueño. El más débil: un dueño puede tener varios proyectos.
+  if(sender){
+    const hits=rows.filter(r=>r.ownerEmail&&r.ownerEmail===sender);
+    if(hits.length)return result('correo del dueño',hits);
+  }
+  return none;
+}
+
+// ── Auto-etiquetado al abrir el correo ──
+function getBodyText(cb){
+  try{
+    if(mailItem&&mailItem.body&&mailItem.body.getAsync){
+      mailItem.body.getAsync(Office.CoercionType.Text,function(r){
+        cb(r.status===Office.AsyncResultStatus.Succeeded?String(r.value||'').slice(0,8000):'');
+      });
+      return;
+    }
+  }catch(e){}
+  cb('');
+}
+function runAutoMatch(){
+  if(!officeReady||!mailItem||!spProjects.length)return;
+  const subject=mailItem.subject||'';
+  const from=(mailItem.from&&mailItem.from.emailAddress)||'';
+  getBodyText(function(body){
+    lastMatch=matchProject(subject,from,body,spProjects);
+    const d=getEmailData();
+    // Nunca pisa lo que ya está puesto: solo rellena el proyecto si está vacío.
+    if(!d.project&&lastMatch.project){applyMatch(lastMatch.project,true);lastMatch.auto=true}
+    renderMatchBanner();
+  });
+}
+function applyMatch(row,silent){
+  const d=getEmailData(),old=d.project;
+  d.project=row.id;
+  const setResp=(!d.responsable&&row.responsable)?true:false;
+  if(setResp)d.responsable=row.responsable;
+  lastMatch=lastMatch||{};
+  lastMatch.applied={id:row.id,responsable:setResp?row.responsable:''};
+  setEmailData(d,function(){
+    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old);renderMatchBanner();
+    if(!silent)showToast('Proyecto: '+row.id+(setResp?' · '+row.responsable:''));
+  });
+}
+function undoMatch(){
+  if(!lastMatch||!lastMatch.applied)return;
+  const d=getEmailData(),old=d.project;
+  if(d.project===lastMatch.applied.id)d.project='';
+  if(lastMatch.applied.responsable&&d.responsable===lastMatch.applied.responsable)d.responsable='';
+  lastMatch.applied=null;lastMatch.auto=false;
+  setEmailData(d,function(){
+    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old);renderMatchBanner();
+    showToast('Asignación deshecha');
+  });
+}
+function applyCandidate(id){
+  const row=findProjectRow(id);
+  if(row)applyMatch(row,false);
+}
+function renderMatchBanner(){
+  const el=document.getElementById('matchBanner');
+  if(!el)return;
+  const d=getEmailData();
+  if(!lastMatch||!lastMatch.signal){el.innerHTML='';return}
+
+  if(lastMatch.project){
+    const row=lastMatch.project;
+    if(d.project===row.id){
+      if(lastMatch.auto&&lastMatch.applied){
+        el.innerHTML=`<div class="match-banner auto">
+          <div class="match-text"><strong>Asignado automáticamente</strong> por ${esc(lastMatch.signal)}<br/>
+            ${esc(row.id)}${row.responsable?' · '+esc(row.responsable):''}</div>
+          <button class="btn btn-ghost btn-sm" onclick="undoMatch()">Deshacer</button></div>`;
+      }else{
+        el.innerHTML=`<div class="match-banner ok"><div class="match-text">Coincide por ${esc(lastMatch.signal)}${row.responsable?' · responsable '+esc(row.responsable):''}</div></div>`;
+      }
+    }else{
+      el.innerHTML=`<div class="match-banner suggest">
+        <div class="match-text"><strong>Detectado</strong> por ${esc(lastMatch.signal)}<br/>
+          ${esc(row.id)}${row.responsable?' · '+esc(row.responsable):''}</div>
+        <button class="btn btn-primary btn-sm" onclick="applyCandidate('${esc(row.id)}')">Aplicar</button></div>`;
+    }
+    return;
+  }
+
+  if(lastMatch.candidates&&lastMatch.candidates.length){
+    el.innerHTML=`<div class="match-banner suggest">
+      <div class="match-text"><strong>${lastMatch.candidates.length} posibles</strong> por ${esc(lastMatch.signal)}</div>
+      <div class="match-options">${lastMatch.candidates.map(c=>
+        `<button class="btn btn-ghost btn-sm" onclick="applyCandidate('${esc(c.id)}')">${esc(c.id)}${c.responsable?' · '+esc(c.responsable):''}</button>`
+      ).join('')}</div></div>`;
+    return;
+  }
+  el.innerHTML='';
+}
+
 // ── SharePoint via the API proxy ──
 async function apiFetch(path,options){
   const token=await getToken();
@@ -885,12 +1064,23 @@ function syncPayload(){
   };
 }
 
+function cacheProjects(rows){lsSet('projects_cache',{at:Date.now(),rows})}
+function loadCachedProjects(){
+  // Returns true when the cached copy is still fresh enough to skip the network.
+  const c=lsGet('projects_cache',null);
+  if(!c||!Array.isArray(c.rows)||!c.rows.length)return false;
+  spProjects=c.rows;
+  return (Date.now()-(c.at||0))<PROJECTS_TTL;
+}
+
 async function loadProjectsFromSP(showMsg){
   if(!isSignedIn()){if(showMsg)showToast('Inicia sesión en ⚙ Config',true);return}
   try{
     const data=await apiFetch(API_PROJECTS,{method:'GET'});
     spProjects=Array.isArray(data.projects)?data.projects:[];
+    cacheProjects(spProjects);
     renderProjectSearch();
+    runAutoMatch();
     if(showMsg)showToast('SP: '+spProjects.length+' proyectos cargados');
   }catch(e){if(showMsg)showToast(e.message,true)}
 }
