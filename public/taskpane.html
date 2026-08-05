@@ -351,7 +351,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05b · diagnóstico';
+const BUILD='2026-08-05c · responsable';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -563,7 +563,7 @@ function syncCategories(oldProject,oldResponsable,cb){
         if(oldRespCat&&oldRespCat!==respCat&&cur.indexOf(oldRespCat)>=0)toRm.push(oldRespCat);
         const add=function(){
           if(!toAdd.length){done(desired.filter(c=>cur.indexOf(c)>=0));return}
-          applyCategories(toAdd,cats,function(err){done(err?[]:toAdd,err)});
+          applyCategories(toAdd,cats,function(err,applied){done(applied,err)});
         };
         if(toRm.length)mailItem.categories.removeAsync(toRm,function(){add()});
         else add();
@@ -580,37 +580,50 @@ function errInfo(err){
   if(!err)return{name:'',message:'',code:''};
   return{name:err.name||'',message:err.message||'',code:err.code||''};
 }
+let elevatedWarned=false;
 function applyCategories(names,cats,cb){
-  const done=function(err){if(cb)cb(err||null)};
+  const done=function(err,applied){if(cb)cb(err||null,applied||[])};
   const missing=names.filter(n=>cats.indexOf(n)<0);
   const temporary=missing.filter(n=>n!==CAT_NOTAS);
   let masterErr=null;
 
-  const cleanup=function(){
-    if(!temporary.length){done();return}
+  const cleanup=function(applied){
+    if(!temporary.length){done(null,applied);return}
     try{
       Office.context.mailbox.masterCategories.removeAsync(temporary,function(){
         masterCats=(masterCats||[]).filter(c=>temporary.indexOf(c)<0);
-        done();
+        done(null,applied);
       });
-    }catch(e){done()}
+    }catch(e){done(null,applied)}
   };
   // Registrar en la lista maestra y aplicar acto seguido puede llegar antes de
   // que el buzón haya propagado el alta, y ahí Outlook rechaza la categoría.
   // Por eso un reintento tardío antes de darlo por fallido.
-  const apply=function(isRetry){
+  const apply=function(list,isRetry){
+    if(!list.length){done(masterErr?'Sin permiso para crear categorías':null,[]);return}
     try{
-      mailItem.categories.addAsync(names,function(r){
-        if(r.status===Office.AsyncResultStatus.Succeeded){cleanup();return}
+      mailItem.categories.addAsync(list,function(r){
+        if(r.status===Office.AsyncResultStatus.Succeeded){cleanup(list);return}
         const info=errInfo(r.error);
-        console.warn('EMP: no se pudo etiquetar',{intento:names,reintento:!!isRetry,error:info,altaMaestra:masterErr,maestra:cats});
-        if(!isRetry&&missing.length){setTimeout(function(){apply(true)},1200);return}
-        done((info.message||info.name||'Outlook rechazó las categorías')+(masterErr?' · lista maestra: '+masterErr:''));
+        console.warn('EMP: no se pudo etiquetar',{intento:list,reintento:!!isRetry,error:info,altaMaestra:masterErr,maestra:cats});
+        // Crear categorías exige ReadWriteMailbox; el manifest pide ReadWriteItem.
+        // Si el alta falló, se aplica al menos lo que ya existe en el buzón —
+        // que es el caso del responsable — en vez de perderlo todo.
+        const existing=list.filter(n=>cats.indexOf(n)>=0);
+        if(masterErr&&existing.length&&existing.length<list.length){
+          if(!elevatedWarned){
+            elevatedWarned=true;
+            showToast('Sin permiso para crear la etiqueta del proyecto; solo se aplican las que ya existen',true);
+          }
+          apply(existing,true);return;
+        }
+        if(!isRetry&&!masterErr&&missing.length){setTimeout(function(){apply(list,true)},1200);return}
+        done((info.message||info.name||'Outlook rechazó las categorías')+(masterErr?' · lista maestra: '+masterErr:''),[]);
       });
-    }catch(e){done(e.message)}
+    }catch(e){done(e.message,[])}
   };
 
-  if(!missing.length){apply(false);return}
+  if(!missing.length){apply(names,false);return}
   try{
     Office.context.mailbox.masterCategories.addAsync(
       missing.map(n=>({displayName:n,color:Office.MailboxEnums.CategoryColor.Preset7})),
@@ -621,10 +634,10 @@ function applyCategories(names,cats,cb){
           masterErr=info.message||info.name||'rechazada';
           console.warn('EMP: no se pudo registrar en la lista maestra',{intento:missing,error:info});
         }
-        apply(false);
+        apply(names,false);
       }
     );
-  }catch(e){masterErr=e.message;apply(false)}
+  }catch(e){masterErr=e.message;apply(names,false)}
 }
 // Botón 🏷: red de seguridad cuando el automático no aplicó. Vuelve a leer la
 // lista maestra por si cambió y dice qué hizo, en vez de un "listo" a ciegas.
