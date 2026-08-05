@@ -518,35 +518,89 @@ function ensureMasterCategory(){
     if(names.indexOf(CAT_NOTAS)<0)Office.context.mailbox.masterCategories.addAsync([{displayName:CAT_NOTAS,color:Office.MailboxEnums.CategoryColor.Preset9}],function(){})
   })}catch(e){}
 }
-function ensureProjectCat(pid,cb){
-  if(!pid){if(cb)cb();return}
-  try{Office.context.mailbox.masterCategories.getAsync(function(r){
-    if(r.status!==Office.AsyncResultStatus.Succeeded){if(cb)cb();return}
-    if(!r.value.some(c=>c.displayName===pid))Office.context.mailbox.masterCategories.addAsync([{displayName:pid,color:Office.MailboxEnums.CategoryColor.Preset7}],function(){if(cb)cb()});
-    else{if(cb)cb()}
-  })}catch(e){if(cb)cb()}
+// Lista maestra del buzón, en caché: se consulta para saber qué categorías de
+// responsable ya existen y qué hay que registrar antes de aplicar.
+let masterCats=null;
+function getMasterCats(cb){
+  if(masterCats){cb(masterCats);return}
+  try{
+    Office.context.mailbox.masterCategories.getAsync(function(r){
+      masterCats=(r.status===Office.AsyncResultStatus.Succeeded)?r.value.map(c=>c.displayName):[];
+      cb(masterCats);
+    });
+  }catch(e){masterCats=[];cb(masterCats)}
 }
-function syncCategories(oldProject){
+// El responsable se etiqueta con una categoría que ya exista en el buzón:
+// primero por nombre exacto, si no, la que lo contenga (p. ej. "Resp · Melissa").
+function findResponsableCat(name,cats){
+  if(!name)return null;
+  const n=String(name).trim().toUpperCase();
+  if(!n||!cats)return null;
+  return cats.find(c=>c.toUpperCase()===n)||cats.find(c=>c.toUpperCase().indexOf(n)>=0)||null;
+}
+
+function syncCategories(oldProject,oldResponsable){
   if(!mailItem||!mailItem.categories)return;
-  try{const d=getEmailData();const hasNotas=d.notes&&d.notes.length>0;
-    const newPid=extractProjectId(d.project);const oldPid=oldProject!==undefined?extractProjectId(oldProject):null;
-    mailItem.categories.getAsync(function(r){if(r.status!==Office.AsyncResultStatus.Succeeded)return;
-      const cur=r.value.map(c=>c.displayName);const toAdd=[],toRm=[];
-      if(hasNotas&&cur.indexOf(CAT_NOTAS)<0)toAdd.push(CAT_NOTAS);
-      if(!hasNotas&&cur.indexOf(CAT_NOTAS)>=0)toRm.push(CAT_NOTAS);
-      if(oldPid&&oldPid!==newPid&&cur.indexOf(oldPid)>=0)toRm.push(oldPid);
-      if(newPid&&cur.indexOf(newPid)<0)toAdd.push(newPid);
-      if(toRm.length)mailItem.categories.removeAsync(toRm,function(){if(toAdd.length)addCatsEnsure(toAdd)});
-      else if(toAdd.length)addCatsEnsure(toAdd)
-    })
+  try{
+    const d=getEmailData();
+    const hasNotas=d.notes&&d.notes.length>0;
+    const newPid=extractProjectId(d.project);
+    const oldPid=oldProject!==undefined?extractProjectId(oldProject):null;
+    getMasterCats(function(cats){
+      const respCat=findResponsableCat(d.responsable,cats);
+      const oldRespCat=oldResponsable?findResponsableCat(oldResponsable,cats):null;
+      mailItem.categories.getAsync(function(r){
+        if(r.status!==Office.AsyncResultStatus.Succeeded)return;
+        const cur=r.value.map(c=>c.displayName);
+        const desired=[];
+        if(hasNotas)desired.push(CAT_NOTAS);
+        if(newPid)desired.push(newPid);
+        if(respCat)desired.push(respCat);
+        const toAdd=desired.filter(c=>cur.indexOf(c)<0);
+        const toRm=[];
+        if(!hasNotas&&cur.indexOf(CAT_NOTAS)>=0)toRm.push(CAT_NOTAS);
+        if(oldPid&&oldPid!==newPid&&cur.indexOf(oldPid)>=0)toRm.push(oldPid);
+        if(oldRespCat&&oldRespCat!==respCat&&cur.indexOf(oldRespCat)>=0)toRm.push(oldRespCat);
+        const add=function(){if(toAdd.length)applyCategories(toAdd,cats)};
+        if(toRm.length)mailItem.categories.removeAsync(toRm,function(){add()});
+        else add();
+      });
+    });
   }catch(e){}
 }
-function addCatsEnsure(cats){
-  const pc=cats.filter(c=>c!==CAT_NOTAS);
-  if(pc.length)ensureProjectCat(pc[0],function(){try{mailItem.categories.addAsync(cats,function(){})}catch(e){}});
-  else try{mailItem.categories.addAsync(cats,function(){})}catch(e){}
+
+// Office.js exige que la categoría esté en la lista maestra para poder
+// aplicarla. Así que se registra lo que falte, se aplica, y lo que acabamos de
+// crear se borra de la maestra: el correo queda etiquetado (sin color, porque
+// ya no está registrada) y la lista del buzón no crece con 468 proyectos.
+function applyCategories(names,cats){
+  const missing=names.filter(n=>cats.indexOf(n)<0);
+  const temporary=missing.filter(n=>n!==CAT_NOTAS);
+  const applyAndCleanup=function(){
+    try{
+      mailItem.categories.addAsync(names,function(r){
+        if(r.status!==Office.AsyncResultStatus.Succeeded){console.warn('EMP: no se pudo etiquetar',r.error);return}
+        if(!temporary.length)return;
+        try{
+          Office.context.mailbox.masterCategories.removeAsync(temporary,function(){
+            masterCats=(masterCats||[]).filter(c=>temporary.indexOf(c)<0);
+          });
+        }catch(e){}
+      });
+    }catch(e){}
+  };
+  if(!missing.length){applyAndCleanup();return}
+  try{
+    Office.context.mailbox.masterCategories.addAsync(
+      missing.map(n=>({displayName:n,color:Office.MailboxEnums.CategoryColor.Preset7})),
+      function(r){
+        if(r.status===Office.AsyncResultStatus.Succeeded)masterCats=(masterCats||[]).concat(missing);
+        applyAndCleanup();
+      }
+    );
+  }catch(e){applyAndCleanup()}
 }
-function manualSyncTags(){syncCategories();showToast('Etiquetas sincronizadas')}
+function manualSyncTags(){masterCats=null;syncCategories();showToast('Etiquetas sincronizadas')}
 
 // ── Render ──
 function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();renderAuth();updateSummary()}
@@ -693,8 +747,8 @@ document.addEventListener('click',function(e){if(!e.target.closest('.project-sel
 function toggleStatus(name){const d=getEmailData();d.status=(d.status===name)?'':name;setEmailData(d,function(){renderStatuses();updateSummary();updateHeaderTags();showToast(d.status?'Estado: '+d.status:'Estado removido');setTimeout(autoSyncSP,500)})}
 function saveResponsable(){
   const v=document.getElementById('responsableInput').value.trim();
-  const d=getEmailData();d.responsable=v;
-  setEmailData(d,function(){showToast(v?'Responsable: '+v:'Responsable removido')})
+  const d=getEmailData();const oldResp=d.responsable;d.responsable=v;
+  setEmailData(d,function(){syncCategories(undefined,oldResp);showToast(v?'Responsable: '+v:'Responsable removido')})
 }
 function noteKeyDown(e,id){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();addNote(id)}}
 function addNote(tid){
@@ -961,18 +1015,21 @@ function dedupeRows(rows){
   return out;
 }
 function matchProject(subject,from,body,rows){
-  const none={signal:null,project:null,candidates:[]};
-  if(!rows||!rows.length)return none;
   const subjectText=normText(subject);
   const text=normText(subject+' '+(body||''));
   const sender=String(from||'').toLowerCase().trim();
+  // Lo que se vio en el correo, para poder explicar por qué no hubo match.
+  const scanned={codes:[],nums:[],folios:[],sender:sender,rows:rows?rows.length:0};
   const result=function(signal,hits){
     const list=dedupeRows(hits);
-    return{signal:signal,project:list.length===1?list[0]:null,candidates:list.length>1?list.slice(0,8):[]};
+    return{signal:signal,project:list.length===1?list[0]:null,candidates:list.length>1?list.slice(0,8):[],scanned:scanned};
   };
+  const none=function(){return{signal:null,project:null,candidates:[],scanned:scanned}};
+  if(!rows||!rows.length)return none();
 
   // 1. Código de proyecto — primero solo en el asunto, que es la señal más limpia.
   const codeRe=/\b[A-Z]{2,5}-\d{3,5}\b/;
+  scanned.codes=findAll(codeRe,text);
   for(const scope of [subjectText,text]){
     const codes=findAll(codeRe,scope);
     if(codes.length){
@@ -981,14 +1038,16 @@ function matchProject(subject,from,body,rows){
     }
   }
   // 2. Número de permiso o de proceso (los correos de las ciudades).
-  const nums=findAll(/\b[A-Z]{1,4}-\d{4}-\d{3,8}-\d{2,6}\b/,text);
-  if(nums.length){
+  scanned.nums=findAll(/\b[A-Z]{1,4}-\d{4}-\d{3,8}-\d{2,6}\b/,text);
+  if(scanned.nums.length){
+    const nums=scanned.nums;
     const hits=rows.filter(r=>(r.permiso&&nums.indexOf(r.permiso)>=0)||(r.proceso&&nums.indexOf(r.proceso)>=0));
     if(hits.length)return result('número de permiso o proceso',hits);
   }
   // 3. Folio.
-  const folios=findAll(/\b\d{15,20}\b/,text);
-  if(folios.length){
+  scanned.folios=findAll(/\b\d{15,20}\b/,text);
+  if(scanned.folios.length){
+    const folios=scanned.folios;
     const hits=rows.filter(r=>r.folio&&folios.indexOf(r.folio)>=0);
     if(hits.length)return result('folio',hits);
   }
@@ -1003,7 +1062,7 @@ function matchProject(subject,from,body,rows){
     const hits=rows.filter(r=>r.ownerEmail&&r.ownerEmail===sender);
     if(hits.length)return result('correo del dueño',hits);
   }
-  return none;
+  return none();
 }
 
 // ── Auto-etiquetado al abrir el correo ──
@@ -1031,25 +1090,25 @@ function runAutoMatch(){
   });
 }
 function applyMatch(row,silent){
-  const d=getEmailData(),old=d.project;
+  const d=getEmailData(),old=d.project,oldResp=d.responsable;
   d.project=row.id;
   const setResp=(!d.responsable&&row.responsable)?true:false;
   if(setResp)d.responsable=row.responsable;
   lastMatch=lastMatch||{};
   lastMatch.applied={id:row.id,responsable:setResp?row.responsable:''};
   setEmailData(d,function(){
-    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old);renderMatchBanner();
+    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old,oldResp);renderMatchBanner();
     if(!silent)showToast('Proyecto: '+row.id+(setResp?' · '+row.responsable:''));
   });
 }
 function undoMatch(){
   if(!lastMatch||!lastMatch.applied)return;
-  const d=getEmailData(),old=d.project;
+  const d=getEmailData(),old=d.project,oldResp=d.responsable;
   if(d.project===lastMatch.applied.id)d.project='';
   if(lastMatch.applied.responsable&&d.responsable===lastMatch.applied.responsable)d.responsable='';
   lastMatch.applied=null;lastMatch.auto=false;
   setEmailData(d,function(){
-    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old);renderMatchBanner();
+    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old,oldResp);renderMatchBanner();
     showToast('Asignación deshecha');
   });
 }
@@ -1061,7 +1120,12 @@ function renderMatchBanner(){
   const el=document.getElementById('matchBanner');
   if(!el)return;
   const d=getEmailData();
-  if(!lastMatch||!lastMatch.signal){el.innerHTML='';return}
+  if(!lastMatch){el.innerHTML='';return}
+  if(!lastMatch.signal){
+    el.innerHTML=`<div class="match-banner ok">
+      <div class="match-text"><strong>Sin coincidencia automática.</strong><br/>${esc(matchDiagnostic())}</div></div>`;
+    return;
+  }
 
   if(lastMatch.project){
     const row=lastMatch.project;
@@ -1092,6 +1156,19 @@ function renderMatchBanner(){
     return;
   }
   el.innerHTML='';
+}
+
+// Sin coincidencia el panel se quedaba callado y no había forma de saber por qué.
+function matchDiagnostic(){
+  const s=(lastMatch&&lastMatch.scanned)||null;
+  if(!s)return 'El emparejador no llegó a correr.';
+  if(!s.rows)return 'La lista de proyectos está vacía: entra en ⚙ Config o pulsa 📂 para cargarla.';
+  const bits=[];
+  if(s.codes.length)bits.push('códigos vistos: '+s.codes.slice(0,4).join(', ')+' (ninguno está en la lista)');
+  if(s.nums.length)bits.push('números vistos: '+s.nums.slice(0,3).join(', ')+' (ninguno coincide)');
+  if(s.folios.length)bits.push('folios vistos: '+s.folios.slice(0,2).join(', ')+' (ninguno coincide)');
+  if(!bits.length)return 'No hay código, número de permiso, folio ni dirección reconocible, y el remitente no es dueño de ningún proyecto.';
+  return bits.join(' · ');
 }
 
 // ── SharePoint via the API proxy ──
