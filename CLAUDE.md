@@ -15,7 +15,7 @@ field to individual emails, plus sync to SharePoint through Power Automate.
 | File | Role |
 |---|---|
 | `public/taskpane.html` | The whole client — UI, CSS and JS in one file. |
-| `public/manifest.xml` | Office Add-in manifest (MailApp, `ReadWriteItem`). Points at the Vercel URLs. v1.3.0.0. |
+| `public/manifest.xml` | Office Add-in manifest (MailApp, `ReadWriteMailbox`). Points at the Vercel URLs. v1.4.0.0. |
 | `public/sp-test.html` | Harness for the `/api/*` endpoints, including a 401 check. |
 | `public/blank.html` | Empty page used as an auth/redirect stub. |
 | `public/icon-64.png` | Ribbon/store icon. |
@@ -49,10 +49,42 @@ Security model — the reason the API layer exists:
 - The Supabase anon key in `/api/config` is public by design; it only permits what Supabase auth
   and RLS permit.
 
-Other core pieces:
+## Automatic matching
 
-- `syncCategories()` mirrors state into Outlook master categories: `EMP Notas` when the email has
-  notes, plus a category named after the project ID (e.g. `CCP-0031`).
+Opening a message runs `matchProject(subject, from, body, rows)`, a pure function that tries five
+signals in order of confidence and stops at the first that yields exactly one row: project code
+in the subject (`CSP-0001`), permit or process number (`B-2025-…`, `PR-2025-…`), folio, full
+street, and sender against `OWNEREMAIL`. Several rows means candidates for the user to pick, never
+a guess — 72 of the 468 projects share a street. Being pure, it is tested against the real list
+and can move server-side when a Power Automate flow needs the same logic.
+
+It fills only what is empty: a message that already has a project is left alone, and a manually
+set responsable is never overwritten. The banner names the signal that matched and offers undo.
+
+`/api/projects` returns trimmed rows (`id, title, address, street, city, zip, responsable,
+permiso, proceso, folio, ownerEmail`), cached ten minutes in module memory and twelve hours in
+`localStorage`, so SharePoint is hit a couple of times a day rather than on every open.
+
+## Outlook categories
+
+This is the part that wasted the most time, so read it before touching `syncCategories()`.
+
+- **`masterCategories.getAsync` fails in this mailbox** even though the mailbox has categories.
+  Do not treat a failed read as an empty list: that assumption makes the code skip categories
+  that exist and would apply cleanly.
+- **Apply one category at a time.** `categories.addAsync` is all-or-nothing, so one unknown name
+  in the batch takes the valid ones down with it.
+- **Applying an existing category needs no elevated permission.** Only creating one does, which
+  is why the manifest asks for `ReadWriteMailbox` (v1.4.0.0). Under `ReadWriteItem` the responsable
+  tag still lands and only the project tag is refused.
+- **Project categories are ephemeral**: registered, applied, then removed from the master list.
+  The message keeps the tag (without colour) and the mailbox list does not grow by 468 entries.
+  `EMP Notas` and the responsable categories are exempt and stay registered — there are six
+  responsables, and that list is worth having.
+- ⚙ Config has a diagnostic that prints the master list, the categories on the open message, and
+  whether each expected category exists. Use it instead of the browser console.
+
+Other core pieces:
 - `createCalendarEvent()` has a four-step fallback chain: `displayNewAppointmentForm` →
   `Office.context.ui.openBrowserWindow` → `window.top.location` → `window.open`.
 - `autoSyncSP()` fires silently after status/note changes; it no-ops when signed out.
@@ -133,13 +165,13 @@ are reached only through the Vercel functions.
 
 ## Known issues / backlog
 
-1. `removeProject()` / `addProject()` operate on `getProjects()`, which is the merged
-   local+SharePoint list, then write the result back to localStorage — SharePoint projects leak
-   into local storage and index-based removal can delete the wrong entry.
-2. Note indices come from array position, so deleting/editing while another user has the same
+1. Note indices come from array position, so deleting/editing while another user has the same
    email open can hit the wrong note.
-3. No rate limiting on the API functions. Any valid Supabase user can call them freely.
-4. No automated tests in the repo, no CI.
+2. No rate limiting on the API functions. Any valid Supabase user can call them freely.
+3. No automated tests in the repo, no CI. The matcher and the API functions do have tests, but
+   they live in a scratchpad rather than here.
+4. One project ID is duplicated in the SharePoint list, and 62 of the 468 projects have no
+   `Responsable`. Those match to a project but get no responsable tag.
 
 ## Working on it
 
