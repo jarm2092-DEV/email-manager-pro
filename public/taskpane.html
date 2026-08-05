@@ -354,7 +354,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05e · etiquetado por partes';
+const BUILD='2026-08-05f · lote y permisos reales';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -558,7 +558,7 @@ function syncCategories(oldProject,oldResponsable,cb){
     const hasNotas=d.notes&&d.notes.length>0;
     const newPid=extractProjectId(d.project);
     const oldPid=oldProject!==undefined?extractProjectId(oldProject):null;
-    getMasterCats(function(cats){
+    getMasterCats(function(cats,known){
       // Si el responsable no tiene categoría en el buzón se crea con su nombre:
       // son seis personas, no 468 proyectos, así que esa lista sí puede quedarse.
       const respCat=findResponsableCat(d.responsable,cats)||(d.responsable?String(d.responsable).trim().toUpperCase():null);
@@ -580,7 +580,7 @@ function syncCategories(oldProject,oldResponsable,cb){
         const keep=[CAT_NOTAS,respCat].filter(Boolean);
         const add=function(){
           if(!toAdd.length){done(desired.filter(c=>cur.indexOf(c)>=0));return}
-          applyCategories(toAdd,keep,function(err,applied){done(applied,err)});
+          applyCategories(toAdd,keep,cats,known,function(err,applied){done(applied,err)});
         };
         if(toRm.length)mailItem.categories.removeAsync(toRm,function(){add()});
         else add();
@@ -598,16 +598,17 @@ function errInfo(err){
   return{name:err.name||'',message:err.message||'',code:err.code||''};
 }
 let elevatedWarned=false;
-// Se aplica de a una categoría. Aplicar una que ya existe en el buzón funciona
-// sin permisos especiales, aunque no hayamos podido leer la lista maestra; y
-// como addAsync es todo-o-nada, una categoría inexistente en el lote tumbaría
-// también a las buenas. Solo si aplicar falla se intenta registrarla.
-function applyCategories(names,keep,cb){
+// Se mandan todas juntas en una sola llamada: aplicarlas por separado hace que
+// la segunda pise el resultado de la primera y la etiqueta anterior desaparece
+// del correo. Si el lote es rechazado —basta una categoría que no exista en el
+// buzón— se registran las que falten y se reintenta entero; y solo como último
+// recurso se van aplicando de a una para salvar las válidas.
+function applyCategories(names,keep,cats,known,cb){
   const done=function(err,applied){if(cb)cb(err||null,applied||[])};
-  const applied=[],created=[];
-  let lastErr=null,i=0;
+  const created=[];
+  let lastErr=null;
 
-  const finish=function(){
+  const finish=function(applied){
     // Lo que registramos y no debe quedarse (la del proyecto) se borra: el
     // correo conserva la etiqueta y la lista del buzón no crece.
     const temp=created.filter(n=>keep.indexOf(n)<0);
@@ -621,59 +622,66 @@ function applyCategories(names,keep,cb){
     }catch(e){end()}
   };
 
-  const createThenRetry=function(name,after){
+  const applyBatch=function(list,after){
     try{
-      Office.context.mailbox.masterCategories.addAsync(
-        [{displayName:name,color:Office.MailboxEnums.CategoryColor.Preset7}],
-        function(r){
-          if(r.status!==Office.AsyncResultStatus.Succeeded){
-            const info=errInfo(r.error);
-            lastErr=info.message||info.name||'No se pudo registrar la categoría';
-            console.warn('EMP: no se pudo registrar en la lista maestra',{categoria:name,error:info});
-            if(!elevatedWarned){
-              elevatedWarned=true;
-              showToast('Outlook no deja crear categorías nuevas: '+lastErr,true);
-            }
-            after(false);return;
-          }
-          created.push(name);
-          masterCats=(masterCats||[]).concat([name]);
-          // Un respiro para que el buzón propague el alta antes de aplicarla.
-          setTimeout(function(){
-            try{
-              mailItem.categories.addAsync([name],function(r2){
-                if(r2.status!==Office.AsyncResultStatus.Succeeded)lastErr=errInfo(r2.error).message||'rechazada tras crearla';
-                after(r2.status===Office.AsyncResultStatus.Succeeded);
-              });
-            }catch(e){lastErr=e.message;after(false)}
-          },400);
-        }
-      );
-    }catch(e){
-      lastErr=e.message;
-      if(!elevatedWarned){elevatedWarned=true;showToast('Outlook no deja crear categorías nuevas: '+e.message,true)}
-      after(false);
-    }
-  };
-
-  const applyOne=function(name,after){
-    try{
-      mailItem.categories.addAsync([name],function(r){
+      mailItem.categories.addAsync(list,function(r){
         if(r.status===Office.AsyncResultStatus.Succeeded){after(true);return}
         const info=errInfo(r.error);
-        lastErr=info.message||info.name||'Outlook rechazó la categoría';
-        console.warn('EMP: no se pudo aplicar, intento registrarla',{categoria:name,error:info});
-        createThenRetry(name,after);
+        lastErr=info.message||info.name||'Outlook rechazó las categorías';
+        console.warn('EMP: lote de categorías rechazado',{intento:list,error:info});
+        after(false);
       });
     }catch(e){lastErr=e.message;after(false)}
   };
 
-  const next=function(){
-    if(i>=names.length){finish();return}
-    const name=names[i++];
-    applyOne(name,function(ok){if(ok)applied.push(name);next()});
+  const registerMissing=function(after){
+    const missing=known?names.filter(n=>cats.indexOf(n)<0):names.slice();
+    if(!missing.length){after();return}
+    let j=0;
+    const one=function(){
+      if(j>=missing.length){after();return}
+      const name=missing[j++];
+      try{
+        Office.context.mailbox.masterCategories.addAsync(
+          [{displayName:name,color:Office.MailboxEnums.CategoryColor.Preset7}],
+          function(r){
+            if(r.status===Office.AsyncResultStatus.Succeeded){
+              created.push(name);
+              masterCats=(masterCats||[]).concat([name]);
+            }else{
+              const info=errInfo(r.error);
+              console.warn('EMP: no se pudo registrar en la lista maestra',{categoria:name,error:info});
+              if(!elevatedWarned&&/permis/i.test(info.message||info.name||'')){
+                elevatedWarned=true;
+                showToast('Outlook no deja crear categorías nuevas: '+(info.message||info.name),true);
+              }
+            }
+            one();
+          }
+        );
+      }catch(e){lastErr=e.message;one()}
+    };
+    one();
   };
-  next();
+
+  applyBatch(names,function(ok){
+    if(ok){finish(names);return}
+    registerMissing(function(){
+      // Un respiro para que el buzón propague las altas antes de reintentar.
+      setTimeout(function(){
+        applyBatch(names,function(ok2){
+          if(ok2){finish(names);return}
+          const applied=[];let k=0;
+          const one=function(){
+            if(k>=names.length){finish(applied);return}
+            const name=names[k++];
+            applyBatch([name],function(okOne){if(okOne)applied.push(name);one()});
+          };
+          one();
+        });
+      },400);
+    });
+  });
 }
 // Botón 🏷: red de seguridad cuando el automático no aplicó. Vuelve a leer la
 // lista maestra por si cambió y dice qué hizo, en vez de un "listo" a ciegas.
@@ -1095,6 +1103,33 @@ function findAll(re,s){
   let m;while((m=rx.exec(s))!==null){out.push(m[0]);if(m.index===rx.lastIndex)rx.lastIndex++}
   return out;
 }
+// "8438 NW 26TH DR" y "8438 NW 26 DR" son la misma calle, y la gente escribe
+// DRIVE o DR según el día. Se normalizan los dos lados antes de comparar.
+const STREET_WORDS={DRIVE:'DR',STREET:'ST',AVENUE:'AVE',ROAD:'RD',COURT:'CT',TERRACE:'TER',PLACE:'PL',BOULEVARD:'BLVD',LANE:'LN',CIRCLE:'CIR',HIGHWAY:'HWY',PARKWAY:'PKWY',TRAIL:'TRL',SQUARE:'SQ',NORTH:'N',SOUTH:'S',EAST:'E',WEST:'W'};
+function normAddr(s){
+  return normText(s)
+    .replace(/(\d+)(ST|ND|RD|TH)\b/g,'$1')
+    .replace(/[A-Z]+/g,function(w){return STREET_WORDS[w]||w})
+    .replace(/\s+/g,' ')
+    .trim();
+}
+// Los números de permiso no tienen un formato común: 9999999999, A99-99999,
+// AAAA-999999-9999… Extraerlos con un patrón es imposible, así que se busca el
+// valor de cada proyecto dentro del texto, exigiendo que no quede pegado a otro
+// caracter alfanumérico para no cazar un número dentro de otro.
+function containsValue(text,value){
+  if(!value)return false;
+  const v=String(value).toUpperCase().trim();
+  if(v.length<6)return false;
+  let from=0,i;
+  while((i=text.indexOf(v,from))>=0){
+    const before=i>0?text.charAt(i-1):' ';
+    const after=(i+v.length)<text.length?text.charAt(i+v.length):' ';
+    if(!/[A-Z0-9]/.test(before)&&!/[A-Z0-9]/.test(after))return true;
+    from=i+1;
+  }
+  return false;
+}
 function dedupeRows(rows){
   const seen={},out=[];
   rows.forEach(r=>{if(!seen[r.id]){seen[r.id]=1;out.push(r)}});
@@ -1124,23 +1159,22 @@ function matchProject(subject,from,body,rows){
     }
   }
   // 2. Número de permiso o de proceso (los correos de las ciudades).
-  scanned.nums=findAll(/\b[A-Z]{1,4}-\d{4}-\d{3,8}-\d{2,6}\b/,text);
-  if(scanned.nums.length){
-    const nums=scanned.nums;
-    const hits=rows.filter(r=>(r.permiso&&nums.indexOf(r.permiso)>=0)||(r.proceso&&nums.indexOf(r.proceso)>=0));
-    if(hits.length)return result('número de permiso o proceso',hits);
+  const numHits=rows.filter(r=>containsValue(text,r.permiso)||containsValue(text,r.proceso));
+  if(numHits.length){
+    scanned.nums=numHits.map(r=>r.permiso||r.proceso);
+    return result('número de permiso o proceso',numHits);
   }
   // 3. Folio.
-  scanned.folios=findAll(/\b\d{15,20}\b/,text);
-  if(scanned.folios.length){
-    const folios=scanned.folios;
-    const hits=rows.filter(r=>r.folio&&folios.indexOf(r.folio)>=0);
-    if(hits.length)return result('folio',hits);
+  const folioHits=rows.filter(r=>containsValue(text,r.folio));
+  if(folioHits.length){
+    scanned.folios=folioHits.map(r=>r.folio);
+    return result('folio',folioHits);
   }
   // 4. Dirección. Se exige la calle completa para no confundir dos "16415".
+  const addrText=normAddr(subject+' '+(body||''));
   const addrHits=rows.filter(function(r){
-    const st=normText(r.street);
-    return st.length>=8&&text.indexOf(st)>=0;
+    const st=normAddr(r.street);
+    return st.length>=8&&addrText.indexOf(st)>=0;
   });
   if(addrHits.length)return result('dirección',addrHits);
   // 5. Correo del dueño. El más débil: un dueño puede tener varios proyectos.
