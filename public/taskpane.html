@@ -341,6 +341,9 @@
       <div class="input-row"><input type="text" class="text-input" id="newStatusName" placeholder="Nombre del estado"/>
         <div class="color-selector" id="colorSelector"></div>
         <button class="btn btn-primary btn-sm" onclick="addStatus()">+</button></div></div>
+    <div class="settings-section"><div class="settings-title">🔍 Diagnóstico de etiquetas</div>
+      <button class="btn btn-ghost btn-sm" onclick="renderDiag()">Ver categorías del buzón</button>
+      <div id="diagBox" style="margin-top:10px"></div></div>
     <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px">
       <button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:rgba(248,113,113,0.3)" onclick="resetAll()">Restablecer todo</button>
       <div class="note-hint" id="buildStamp" style="margin-top:10px"></div></div>
@@ -351,7 +354,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05c · responsable';
+const BUILD='2026-08-05d · diagnóstico en panel';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -746,6 +749,32 @@ function renderSettings() {
       <button class="remove-btn" onclick="removeStatus(${i})">✕</button>
     </div>
   `).join('');
+}
+
+// Evita tener que abrir la consola del navegador para ver qué hay en el buzón.
+function renderDiag(){
+  const box=document.getElementById('diagBox');
+  if(!box)return;
+  box.innerHTML='<div class="note-hint">Consultando...</div>';
+  if(!officeReady||!mailItem){box.innerHTML='<div class="note-hint">Sin Outlook: abre el panel dentro de un correo.</div>';return}
+  const d=getEmailData();
+  masterCats=null;
+  getMasterCats(function(cats){
+    const resp=findResponsableCat(d.responsable,cats);
+    const pid=extractProjectId(d.project);
+    mailItem.categories.getAsync(function(r){
+      const cur=(r.status===Office.AsyncResultStatus.Succeeded)?r.value.map(c=>c.displayName):[];
+      const row=function(k,v){return '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-muted);min-width:120px">'+esc(k)+'</span><span style="flex:1">'+esc(v)+'</span></div>'};
+      box.innerHTML=
+        row('Lista maestra ('+cats.length+')',cats.length?cats.join(', '):'vacía')+
+        row('En este correo',cur.length?cur.join(', '):'ninguna')+
+        row('Proyecto',d.project||'—')+
+        row('Responsable',d.responsable||'—')+
+        row('Categoría de responsable',resp?resp+' (existe)':(d.responsable?'no existe en el buzón':'—'))+
+        row('Categoría de proyecto',pid?(cats.indexOf(pid)>=0?pid+' (existe)':pid+' (hay que crearla)'):'—')+
+        '<div class="note-hint" style="margin-top:8px">Si la lista maestra está vacía, el add-in solo puede etiquetar creando categorías, y eso exige el permiso ReadWriteMailbox en el manifest.</div>';
+    });
+  });
 }
 
 // ── Project Dropdown ──
