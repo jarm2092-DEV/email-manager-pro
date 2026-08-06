@@ -225,6 +225,8 @@
 
     /* Responsable field */
     .responsable-section{display:flex;align-items:center;gap:8px}
+    .responsable-section select{flex:1;width:100%;cursor:pointer;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%);background-position:calc(100% - 16px) 16px,calc(100% - 11px) 16px;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+    .responsable-section select option{background:var(--bg-secondary);color:var(--text-primary)}
     .responsable-display{flex:1;padding:8px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;color:var(--text-secondary);min-height:36px;display:flex;align-items:center}
     .responsable-display.assigned{color:var(--info);border-color:rgba(59,130,246,0.3);background:var(--info-subtle)}
     
@@ -294,8 +296,7 @@
     <div class="section">
       <div class="section-header"><div class="section-label">Responsable / Asignado</div></div>
       <div class="responsable-section">
-        <input type="text" class="text-input" id="responsableInput" placeholder="Nombre del responsable..." onkeydown="if(event.key==='Enter')saveResponsable()" style="font-size:12px;padding:6px 10px;"/>
-        <button class="btn btn-primary btn-sm" onclick="saveResponsable()">✓</button>
+        <select class="text-input" id="responsableSelect" onchange="saveResponsable()"></select>
       </div>
     </div>
     <div class="section">
@@ -354,7 +355,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05f · lote y permisos reales';
+const BUILD='2026-08-05g · responsables de SP';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -499,7 +500,7 @@ setTimeout(function(){if(!officeReady){document.getElementById('emailSubject').t
 // Pinta con la copia en localStorage y solo va a la red si está vencida.
 function bootProjects(){
   const fresh=loadCachedProjects();
-  if(spProjects.length){renderProjectSearch();runAutoMatch()}
+  if(spProjects.length){renderProjectSearch();renderResponsable();runAutoMatch()}
   if(!fresh)loadProjectsFromSP(false);
 }
 
@@ -720,8 +721,26 @@ function renderProjectSearch(){
     cb.classList.add('visible');
   }else{si.value='';cb.classList.remove('visible')}
 }
+// Los responsables salen de la propia lista de SharePoint, no de un catálogo
+// aparte: si alguien entra o sale del equipo, el desplegable lo refleja solo.
+function getResponsables(){
+  const seen={},out=[];
+  spProjects.forEach(function(p){
+    const r=(p.responsable||'').trim();
+    if(r&&!seen[r.toUpperCase()]){seen[r.toUpperCase()]=1;out.push(r)}
+  });
+  return out.sort(function(a,b){return a.localeCompare(b)});
+}
 function renderResponsable(){
-  const d=getEmailData();document.getElementById('responsableInput').value=d.responsable||''
+  const sel=document.getElementById('responsableSelect');
+  if(!sel)return;
+  const d=getEmailData(),cur=(d.responsable||'').trim();
+  const list=getResponsables();
+  // Un valor viejo que ya no esté en SharePoint se conserva como opción para
+  // no borrarlo por accidente al abrir el correo.
+  if(cur&&!list.some(function(r){return r.toUpperCase()===cur.toUpperCase()}))list.push(cur);
+  sel.innerHTML='<option value="">— Sin responsable —</option>'+
+    list.map(function(r){return '<option value="'+esc(r)+'"'+(r.toUpperCase()===cur.toUpperCase()?' selected':'')+'>'+esc(r)+'</option>'}).join('');
 }
 function renderNotes(){
   const d=getEmailData(),notes=d.notes||[];
@@ -851,9 +870,19 @@ document.addEventListener('click',function(e){if(!e.target.closest('.project-sel
 // ── Actions ──
 function toggleStatus(name){const d=getEmailData();d.status=(d.status===name)?'':name;setEmailData(d,function(){renderStatuses();updateSummary();updateHeaderTags();showToast(d.status?'Estado: '+d.status:'Estado removido');setTimeout(autoSyncSP,500)})}
 function saveResponsable(){
-  const v=document.getElementById('responsableInput').value.trim();
-  const d=getEmailData();const oldResp=d.responsable;d.responsable=v;
-  setEmailData(d,function(){syncCategories(undefined,oldResp);showToast(v?'Responsable: '+v:'Responsable removido')})
+  const sel=document.getElementById('responsableSelect');
+  const v=sel?sel.value.trim():'';
+  const d=getEmailData();const oldResp=d.responsable;
+  if((oldResp||'')===v)return;
+  d.responsable=v;
+  setEmailData(d,function(){
+    renderResponsable();
+    // Cambiar de responsable quita la etiqueta anterior y pone la nueva.
+    syncCategories(undefined,oldResp,function(applied,err){
+      if(err){showToast(err,true);return}
+      showToast(v?'Responsable: '+v+(applied.length?' · '+applied.join(', '):''):'Responsable removido');
+    });
+  })
 }
 function noteKeyDown(e,id){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();addNote(id)}}
 function addNote(tid){
@@ -1334,6 +1363,7 @@ async function loadProjectsFromSP(showMsg){
     spProjects=Array.isArray(data.projects)?data.projects:[];
     cacheProjects(spProjects);
     renderProjectSearch();
+    renderResponsable();  // el desplegable se llena con los responsables de SP
     runAutoMatch();
     if(showMsg)showToast('SP: '+spProjects.length+' proyectos cargados');
   }catch(e){if(showMsg)showToast(e.message,true)}
