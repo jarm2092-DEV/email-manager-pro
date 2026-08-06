@@ -4,7 +4,7 @@
            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
            xsi:type="MailApp">
   <Id>a9e50e47-c5d0-4a3b-bd12-8e1f7c4d3a01</Id>
-  <Version>1.4.0.0</Version>
+  <Version>1.5.0.0</Version>
   <ProviderName>MiEquipo</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Email Manager Pro"/>
@@ -76,5 +76,60 @@
         <bt:String id="btnTooltip" DefaultValue="Open the email management panel with notes, projects and statuses."/>
       </bt:LongStrings>
     </Resources>
+    <!-- SupportsPinning solo existe en el esquema 1.1, que se anida dentro del 1.0.
+         Requiere el conjunto Mailbox 1.5 y que el add-in atienda ItemChanged, cosa
+         que hace onItemChanged() en taskpane.html: al anclarlo, el panel sigue
+         abierto y se recarga con cada correo que abras. -->
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.5">
+          <bt:Set Name="Mailbox"/>
+        </bt:Sets>
+      </Requirements>
+      <Hosts>
+        <Host xsi:type="MailHost">
+          <DesktopFormFactor>
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="empGroup">
+                  <Label resid="groupLabel"/>
+                  <Control xsi:type="Button" id="empButton">
+                    <Label resid="btnLabel"/>
+                    <Supertip>
+                      <Title resid="btnLabel"/>
+                      <Description resid="btnTooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="iconImg"/>
+                      <bt:Image size="32" resid="iconImg"/>
+                      <bt:Image size="80" resid="iconImg"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="taskpaneUrl"/>
+                      <SupportsPinning>true</SupportsPinning>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      <Resources>
+        <bt:Images>
+          <bt:Image id="iconImg" DefaultValue="https://email-manager-pro-seven.vercel.app/icon-64.png"/>
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="taskpaneUrl" DefaultValue="https://email-manager-pro-seven.vercel.app/taskpane.html"/>
+        </bt:Urls>
+        <bt:ShortStrings>
+          <bt:String id="groupLabel" DefaultValue="Email Manager Pro"/>
+          <bt:String id="btnLabel" DefaultValue="Email Manager"/>
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="btnTooltip" DefaultValue="Open the email management panel with notes, projects and statuses."/>
+        </bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
   </VersionOverrides>
 </OfficeApp>
