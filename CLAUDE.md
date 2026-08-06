@@ -24,6 +24,7 @@ field to individual emails, plus sync to SharePoint through Power Automate.
 | `api/projects.js` | Reads the project list from SharePoint via `FLOW_READ_URL`. Auth required. |
 | `api/sync.js` | Writes a tracking row via `FLOW_WRITE_URL`. Auth required. |
 | `api/me.js` | Returns the caller's `display_name` and role from CCP's `user_roles`. |
+| `api/move.js` | Moves a message to the responsable's Inbox subfolder via `FLOW_MOVE_URL`. Auth required. |
 | `api/_supabase.js` | Token verification and profile lookup. The `_` prefix keeps it off the routing table. |
 
 ## Architecture
@@ -134,6 +135,7 @@ Set in Vercel → Settings → Environment Variables. See `.env.example`.
 |---|---|---|
 | `FLOW_READ_URL` | **yes** | Power Automate trigger URL with its `?sig=` |
 | `FLOW_WRITE_URL` | **yes** | Same, for the write flow |
+| `FLOW_MOVE_URL` | **yes** | Same, for the flow that moves a message to a folder |
 | `SUPABASE_URL` | no | Project URL |
 | `SUPABASE_ANON_KEY` | no | Served to the client by `/api/config` |
 

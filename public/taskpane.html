@@ -269,6 +269,7 @@
   <!-- MAIN -->
   <div class="panel active" id="panel-main">
     <div id="matchBanner"></div>
+    <div id="moveBanner"></div>
     <div class="summary-strip">
       <div class="summary-card"><div class="num" id="noteCount">0</div><div class="label">Notas</div></div>
       <div class="summary-card"><div class="num" id="currentStatusDisplay">—</div><div class="label">Estado</div></div>
@@ -342,6 +343,11 @@
       <div class="input-row"><input type="text" class="text-input" id="newStatusName" placeholder="Nombre del estado"/>
         <div class="color-selector" id="colorSelector"></div>
         <button class="btn btn-primary btn-sm" onclick="addStatus()">+</button></div></div>
+    <div class="settings-section"><div class="settings-title">📂 Mover a la carpeta del responsable</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="autoMoveChk" onchange="toggleAutoMove()" style="width:16px;height:16px;cursor:pointer"/>
+        <span>Mover el correo al asignar responsable</span></label>
+      <div class="note-hint" style="margin-top:6px">Va a la subcarpeta de Bandeja de entrada con el nombre del responsable. Solo se mueve si la etiqueta se aplicó, y siempre puedes devolverlo.</div></div>
     <div class="settings-section"><div class="settings-title">🔍 Diagnóstico de etiquetas</div>
       <button class="btn btn-ghost btn-sm" onclick="renderDiag()">Ver categorías del buzón</button>
       <div id="diagBox" style="margin-top:10px"></div></div>
@@ -355,7 +361,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-05g · responsables de SP';
+const BUILD='2026-08-06 · mover a carpeta';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -365,6 +371,7 @@ const API_PROJECTS='/api/projects';
 const API_SYNC='/api/sync';
 const API_CONFIG='/api/config';
 const API_ME='/api/me';
+const API_MOVE='/api/move';
 let spSyncing=false;
 // Rows from SharePoint: {id,title,address,street,city,zip,responsable,permiso,proceso,folio,ownerEmail}
 let spProjects=[];
@@ -416,20 +423,21 @@ function getFullProjectName(idOrFull){
 }
 
 function getEmailData() {
-  if(!customProperties) return { status: '', project: '', responsable: '', notes: [] };
+  if(!customProperties) return { status: '', project: '', responsable: '', movedTo: '', notes: [] };
   try {
     const rawData = customProperties.get('EMP_Data');
-    if(!rawData) return { status: '', project: '', responsable: '', notes: [] };
+    if(!rawData) return { status: '', project: '', responsable: '', movedTo: '', notes: [] };
     const parsed = JSON.parse(rawData);
     return {
       status: parsed.status || '',
       project: parsed.project || '',
       responsable: parsed.responsable || '',
+      movedTo: parsed.movedTo || '',
       notes: Array.isArray(parsed.notes) ? parsed.notes : []
     };
   } catch(e) {
     console.warn('EMP: Error parseando datos de email', e);
-    return { status: '', project: '', responsable: '', notes: [] };
+    return { status: '', project: '', responsable: '', movedTo: '', notes: [] };
   }
 }
 
@@ -697,7 +705,7 @@ function manualSyncTags(){
 }
 
 // ── Render ──
-function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();renderAuth();updateSummary()}
+function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();renderAuth();renderMoveBanner();updateSummary()}
 function renderStatuses(){
   const c = document.getElementById('statusContainer');
   const statuses = getStatuses();
@@ -794,6 +802,8 @@ function renderSettings() {
   document.getElementById('authorName').value = lsGet('author', '');
   const stamp = document.getElementById('buildStamp');
   if (stamp) stamp.textContent = 'Versión ' + BUILD;
+  const chk = document.getElementById('autoMoveChk');
+  if (chk) chk.checked = autoMoveEnabled();
   
   // Render Colors
   document.getElementById('colorSelector').innerHTML = COLORS.map(c => 
@@ -881,6 +891,7 @@ function saveResponsable(){
     syncCategories(undefined,oldResp,function(applied,err){
       if(err){showToast(err,true);return}
       showToast(v?'Responsable: '+v+(applied.length?' · '+applied.join(', '):''):'Responsable removido');
+      if(v&&applied.length)moveToResponsableFolder(v,false);
     });
   })
 }
@@ -1246,8 +1257,13 @@ function applyMatch(row,silent){
   lastMatch=lastMatch||{};
   lastMatch.applied={id:row.id,responsable:setResp?row.responsable:''};
   setEmailData(d,function(){
-    renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old,oldResp);renderMatchBanner();
-    if(!silent)showToast('Proyecto: '+row.id+(setResp?' · '+row.responsable:''));
+    renderProjectSearch();renderResponsable();updateHeaderTags();renderMatchBanner();
+    // El movimiento va después de etiquetar, y solo si la etiqueta se aplicó:
+    // así el correo nunca sale de la bandeja sin quedar marcado antes.
+    syncCategories(old,oldResp,function(applied,err){
+      if(!silent)showToast('Proyecto: '+row.id+(setResp?' · '+row.responsable:''));
+      if(setResp&&!err&&applied.length)moveToResponsableFolder(row.responsable,true);
+    });
   });
 }
 function undoMatch(){
@@ -1318,6 +1334,76 @@ function matchDiagnostic(){
   if(s.folios.length)bits.push('folios vistos: '+s.folios.slice(0,2).join(', ')+' (ninguno coincide)');
   if(!bits.length)return 'No hay código, número de permiso, folio ni dirección reconocible, y el remitente no es dueño de ningún proyecto.';
   return bits.join(' · ');
+}
+
+// ── Mover el correo a la carpeta del responsable ──
+// Office.js no sabe mover mensajes, así que el trabajo lo hace un flow de Power
+// Automate: aquí solo se manda el id del mensaje en el formato REST, que es el
+// que entiende el conector de Outlook.
+function autoMoveEnabled(){return lsGet('automove',true)!==false}
+function restMessageId(){
+  try{
+    if(!mailItem||!mailItem.itemId)return '';
+    if(Office.context.mailbox.convertToRestId&&Office.MailboxEnums.RestVersion){
+      return Office.context.mailbox.convertToRestId(mailItem.itemId,Office.MailboxEnums.RestVersion.v2_0);
+    }
+    return mailItem.itemId;
+  }catch(e){return ''}
+}
+async function moveMessage(folder){
+  const id=restMessageId();
+  if(!id)throw new Error('No se pudo identificar el correo');
+  await apiFetch(API_MOVE,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({messageId:id,folder:folder||''})
+  });
+}
+// Se llama al asignar responsable. No mueve dos veces al mismo sitio ni mueve
+// cuando el usuario apagó la opción en Config.
+async function moveToResponsableFolder(name,silent){
+  if(!autoMoveEnabled()||!isSignedIn()||!officeReady||!mailItem)return;
+  const folder=(name||'').trim();
+  if(!folder)return;
+  const d=getEmailData();
+  if(d.movedTo===folder)return;
+  try{
+    await moveMessage(folder);
+    const nd=getEmailData();nd.movedTo=folder;
+    setEmailData(nd,function(){
+      if(!silent)showToast('Movido a Bandeja de entrada/'+folder);
+      renderMoveBanner(folder);
+    });
+  }catch(e){
+    showToast('No se pudo mover: '+e.message,true);
+  }
+}
+async function undoMove(){
+  const d=getEmailData();
+  const from=d.movedTo;
+  if(!from)return;
+  try{
+    await moveMessage('');
+    const nd=getEmailData();nd.movedTo='';
+    setEmailData(nd,function(){
+      showToast('Devuelto a Bandeja de entrada');
+      renderMoveBanner('');
+    });
+  }catch(e){showToast('No se pudo devolver: '+e.message,true)}
+}
+function renderMoveBanner(folder){
+  const el=document.getElementById('moveBanner');
+  if(!el)return;
+  const f=folder!==undefined?folder:getEmailData().movedTo;
+  if(!f){el.innerHTML='';return}
+  el.innerHTML=`<div class="match-banner auto">
+    <div class="match-text">📂 En <strong>Bandeja de entrada/${esc(f)}</strong></div>
+    <button class="btn btn-ghost btn-sm" onclick="undoMove()">Devolver</button></div>`;
+}
+function toggleAutoMove(){
+  const on=document.getElementById('autoMoveChk').checked;
+  lsSet('automove',on);
+  showToast(on?'Mover automáticamente activado':'Mover automáticamente desactivado');
 }
 
 // ── SharePoint via the API proxy ──
