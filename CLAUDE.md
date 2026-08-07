@@ -24,7 +24,6 @@ field to individual emails, plus sync to SharePoint through Power Automate.
 | `api/projects.js` | Reads the project list from SharePoint via `FLOW_READ_URL`. Auth required. |
 | `api/sync.js` | Writes a tracking row via `FLOW_WRITE_URL`. Auth required. |
 | `api/me.js` | Returns the caller's `display_name` and role from CCP's `user_roles`. |
-| `api/move.js` | Moves a message to the responsable's Inbox subfolder via `FLOW_MOVE_URL`. Auth required. |
 | `api/_supabase.js` | Token verification and profile lookup. The `_` prefix keeps it off the routing table. |
 
 ## Architecture
@@ -130,9 +129,10 @@ extra field bolted onto a shared save flow.
 ### `EMP · Archivar por responsable` — the sweeper
 
 A scheduled flow (every 5 min) that files messages by their category, with no HTTP trigger and
-so no URL and no env var. It is what actually guarantees the filing: the taskpane's own move only
-runs while someone has the message open in the add-in, whereas this catches anything tagged from
-anywhere — Outlook mobile, desktop, another person.
+so no URL and no env var. **It is the only thing that moves mail.** The taskpane deliberately does
+not move anything: filing follows the category, so the add-in's whole job is to get the category
+right, and the sweeper then catches messages tagged from anywhere — Outlook mobile, desktop,
+another person, or the add-in.
 
 ```
 Recurrence 5 min
@@ -164,10 +164,16 @@ The folder ids come from
 `GET https://graph.microsoft.com/v1.0/me/mailFolders/inbox/childFolders?$select=id,displayName`
 via the connector's *Send an HTTP request*. Re-run it when a responsable is added.
 
-Consequence for the client: **Devolver has to clear the responsable**, not just move the message
-back. Leaving the category on a message returned to the Inbox just gets it filed again on the next
-sweep. Same reason the ⚙ Config switch only governs the instant move — the sweeper archives
-regardless.
+There used to be a client-side move as well (`api/move.js` + a `FLOW_MOVE_URL` flow, commit
+`58d90bf`), so that assigning a responsable filed the message instantly instead of within five
+minutes. It was dropped rather than finished: it needed a second flow to buy back a few minutes of
+latency nobody was waiting on, and it brought its own bugs — the message id changes on a move, so
+an undo button could not reliably find the message it had just moved. Resurrect it from git if the
+delay ever turns out to matter, but the sweeper is the design.
+
+The one thing that follows from "the category is the assignment": **removing the responsable in
+the add-in does not bring the message back**. It only stops the next sweep from filing it again.
+Returning it to the Inbox is a manual drag. The ⚙ Config panel says so.
 
 ## Environment variables
 
@@ -177,7 +183,6 @@ Set in Vercel → Settings → Environment Variables. See `.env.example`.
 |---|---|---|
 | `FLOW_READ_URL` | **yes** | Power Automate trigger URL with its `?sig=` |
 | `FLOW_WRITE_URL` | **yes** | Same, for the write flow |
-| `FLOW_MOVE_URL` | **yes** | Same, for the flow that moves a message to a folder |
 | `SUPABASE_URL` | no | Project URL |
 | `SUPABASE_ANON_KEY` | no | Served to the client by `/api/config` |
 

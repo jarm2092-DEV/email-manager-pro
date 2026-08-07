@@ -269,7 +269,6 @@
   <!-- MAIN -->
   <div class="panel active" id="panel-main">
     <div id="matchBanner"></div>
-    <div id="moveBanner"></div>
     <div class="summary-strip">
       <div class="summary-card"><div class="num" id="noteCount">0</div><div class="label">Notas</div></div>
       <div class="summary-card"><div class="num" id="currentStatusDisplay">—</div><div class="label">Estado</div></div>
@@ -343,11 +342,8 @@
       <div class="input-row"><input type="text" class="text-input" id="newStatusName" placeholder="Nombre del estado"/>
         <div class="color-selector" id="colorSelector"></div>
         <button class="btn btn-primary btn-sm" onclick="addStatus()">+</button></div></div>
-    <div class="settings-section"><div class="settings-title">📂 Mover a la carpeta del responsable</div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="autoMoveChk" onchange="toggleAutoMove()" style="width:16px;height:16px;cursor:pointer"/>
-        <span>Mover el correo al asignar responsable</span></label>
-      <div class="note-hint" style="margin-top:6px">Va a la subcarpeta de Bandeja de entrada con el nombre del responsable. Solo se mueve si la etiqueta se aplicó, y siempre puedes devolverlo — devolver quita también el responsable.<br>Apagarlo solo evita el movimiento inmediato: el flow del buzón archiva por etiqueta cada pocos minutos de todas formas.</div></div>
+    <div class="settings-section"><div class="settings-title">📂 Carpeta del responsable</div>
+      <div class="note-hint">El correo se archiva solo en la subcarpeta de Bandeja de entrada con el nombre del responsable. Lo hace un flow del buzón que revisa las etiquetas cada pocos minutos, así que tarda un poco en moverse y funciona aunque el complemento esté cerrado.<br>Para deshacerlo, quita el responsable aquí y mueve el correo a mano.</div></div>
     <div class="settings-section"><div class="settings-title">🔍 Diagnóstico de etiquetas</div>
       <button class="btn btn-ghost btn-sm" onclick="renderDiag()">Ver categorías del buzón</button>
       <div id="diagBox" style="margin-top:10px"></div></div>
@@ -361,7 +357,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-07 · devolver quita el responsable';
+const BUILD='2026-08-07 · archivado por el flow del buzón';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -371,7 +367,6 @@ const API_PROJECTS='/api/projects';
 const API_SYNC='/api/sync';
 const API_CONFIG='/api/config';
 const API_ME='/api/me';
-const API_MOVE='/api/move';
 let spSyncing=false;
 // Rows from SharePoint: {id,title,address,street,city,zip,responsable,permiso,proceso,folio,ownerEmail}
 let spProjects=[];
@@ -423,21 +418,20 @@ function getFullProjectName(idOrFull){
 }
 
 function getEmailData() {
-  if(!customProperties) return { status: '', project: '', responsable: '', movedTo: '', notes: [] };
+  if(!customProperties) return { status: '', project: '', responsable: '', notes: [] };
   try {
     const rawData = customProperties.get('EMP_Data');
-    if(!rawData) return { status: '', project: '', responsable: '', movedTo: '', notes: [] };
+    if(!rawData) return { status: '', project: '', responsable: '', notes: [] };
     const parsed = JSON.parse(rawData);
     return {
       status: parsed.status || '',
       project: parsed.project || '',
       responsable: parsed.responsable || '',
-      movedTo: parsed.movedTo || '',
       notes: Array.isArray(parsed.notes) ? parsed.notes : []
     };
   } catch(e) {
     console.warn('EMP: Error parseando datos de email', e);
-    return { status: '', project: '', responsable: '', movedTo: '', notes: [] };
+    return { status: '', project: '', responsable: '', notes: [] };
   }
 }
 
@@ -705,7 +699,7 @@ function manualSyncTags(){
 }
 
 // ── Render ──
-function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();renderAuth();renderMoveBanner();updateSummary()}
+function renderAll(){renderStatuses();renderProjectSearch();renderResponsable();renderNotes();renderSettings();renderAuth();updateSummary()}
 function renderStatuses(){
   const c = document.getElementById('statusContainer');
   const statuses = getStatuses();
@@ -802,9 +796,6 @@ function renderSettings() {
   document.getElementById('authorName').value = lsGet('author', '');
   const stamp = document.getElementById('buildStamp');
   if (stamp) stamp.textContent = 'Versión ' + BUILD;
-  const chk = document.getElementById('autoMoveChk');
-  if (chk) chk.checked = autoMoveEnabled();
-  
   // Render Colors
   document.getElementById('colorSelector').innerHTML = COLORS.map(c => 
     `<div class="color-dot ${selectedColor === c.name ? 'active' : ''}" style="background:${c.hex}" onclick="pickColor('${c.name}')"></div>`
@@ -887,11 +878,12 @@ function saveResponsable(){
   d.responsable=v;
   setEmailData(d,function(){
     renderResponsable();
-    // Cambiar de responsable quita la etiqueta anterior y pone la nueva.
+    // Cambiar de responsable quita la etiqueta anterior y pone la nueva. Mover
+    // el correo a su carpeta ya no es cosa nuestra: lo hace un flow que barre el
+    // buzón por etiqueta, así que basta con dejar la etiqueta bien puesta.
     syncCategories(undefined,oldResp,function(applied,err){
       if(err){showToast(err,true);return}
       showToast(v?'Responsable: '+v+(applied.length?' · '+applied.join(', '):''):'Responsable removido');
-      if(v&&applied.length)moveToResponsableFolder(v,false);
     });
   })
 }
@@ -1258,11 +1250,8 @@ function applyMatch(row,silent){
   lastMatch.applied={id:row.id,responsable:setResp?row.responsable:''};
   setEmailData(d,function(){
     renderProjectSearch();renderResponsable();updateHeaderTags();renderMatchBanner();
-    // El movimiento va después de etiquetar, y solo si la etiqueta se aplicó:
-    // así el correo nunca sale de la bandeja sin quedar marcado antes.
     syncCategories(old,oldResp,function(applied,err){
       if(!silent)showToast('Proyecto: '+row.id+(setResp?' · '+row.responsable:''));
-      if(setResp&&!err&&applied.length)moveToResponsableFolder(row.responsable,true);
     });
   });
 }
@@ -1334,86 +1323,6 @@ function matchDiagnostic(){
   if(s.folios.length)bits.push('folios vistos: '+s.folios.slice(0,2).join(', ')+' (ninguno coincide)');
   if(!bits.length)return 'No hay código, número de permiso, folio ni dirección reconocible, y el remitente no es dueño de ningún proyecto.';
   return bits.join(' · ');
-}
-
-// ── Mover el correo a la carpeta del responsable ──
-// Office.js no sabe mover mensajes, así que el trabajo lo hace un flow de Power
-// Automate: aquí solo se manda el id del mensaje en el formato REST, que es el
-// que entiende el conector de Outlook.
-function autoMoveEnabled(){return lsGet('automove',true)!==false}
-function restMessageId(){
-  try{
-    if(!mailItem||!mailItem.itemId)return '';
-    if(Office.context.mailbox.convertToRestId&&Office.MailboxEnums.RestVersion){
-      return Office.context.mailbox.convertToRestId(mailItem.itemId,Office.MailboxEnums.RestVersion.v2_0);
-    }
-    return mailItem.itemId;
-  }catch(e){return ''}
-}
-async function moveMessage(folder){
-  const id=restMessageId();
-  if(!id)throw new Error('No se pudo identificar el correo');
-  await apiFetch(API_MOVE,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({messageId:id,folder:folder||''})
-  });
-}
-// Se llama al asignar responsable. No mueve dos veces al mismo sitio ni mueve
-// cuando el usuario apagó la opción en Config.
-async function moveToResponsableFolder(name,silent){
-  if(!autoMoveEnabled()||!isSignedIn()||!officeReady||!mailItem)return;
-  const folder=(name||'').trim();
-  if(!folder)return;
-  const d=getEmailData();
-  if(d.movedTo===folder)return;
-  try{
-    await moveMessage(folder);
-    const nd=getEmailData();nd.movedTo=folder;
-    setEmailData(nd,function(){
-      if(!silent)showToast('Movido a Bandeja de entrada/'+folder);
-      renderMoveBanner(folder);
-    });
-  }catch(e){
-    showToast('No se pudo mover: '+e.message,true);
-  }
-}
-// Devolver no puede limitarse a mover: el flow que barre el buzón archiva por
-// etiqueta, así que un correo devuelto con la del responsable todavía puesta
-// volvería a su carpeta en la ronda siguiente. Quitar la asignación es lo único
-// que se sostiene — la etiqueta es la asignación, y la carpeta sale de ella.
-async function undoMove(){
-  const d=getEmailData();
-  if(!d.movedTo)return;
-  const oldResp=d.responsable;
-  try{
-    await moveMessage('');
-  }catch(e){showToast('No se pudo devolver: '+e.message,true);return}
-  const nd=getEmailData();
-  nd.movedTo='';
-  nd.responsable='';
-  setEmailData(nd,function(){
-    renderResponsable();
-    renderMoveBanner('');
-    syncCategories(undefined,oldResp,function(applied,err){
-      if(err){showToast('Devuelto, pero la etiqueta '+oldResp+' sigue puesta: '+err,true);return}
-      showToast(oldResp?'Devuelto · responsable '+oldResp+' quitado':'Devuelto a Bandeja de entrada');
-    });
-  });
-}
-function renderMoveBanner(folder){
-  const el=document.getElementById('moveBanner');
-  if(!el)return;
-  const f=folder!==undefined?folder:getEmailData().movedTo;
-  if(!f){el.innerHTML='';return}
-  el.innerHTML=`<div class="match-banner auto">
-    <div class="match-text">📂 En <strong>Bandeja de entrada/${esc(f)}</strong></div>
-    <button class="btn btn-ghost btn-sm" onclick="undoMove()" title="Lo devuelve a la bandeja y quita el responsable">Devolver</button></div>`;
-}
-function toggleAutoMove(){
-  const on=document.getElementById('autoMoveChk').checked;
-  lsSet('automove',on);
-  showToast(on?'Mover automáticamente activado':'Mover automáticamente desactivado');
 }
 
 // ── SharePoint via the API proxy ──
