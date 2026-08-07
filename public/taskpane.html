@@ -357,7 +357,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-07 · archivado por el flow del buzón';
+const BUILD='2026-08-07 · números con o sin guiones';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -1147,21 +1147,32 @@ function normAddr(s){
 }
 // Los números de permiso no tienen un formato común: 9999999999, A99-99999,
 // AAAA-999999-9999… Extraerlos con un patrón es imposible, así que se busca el
-// valor de cada proyecto dentro del texto, exigiendo que no quede pegado a otro
-// caracter alfanumérico para no cazar un número dentro de otro.
-function containsValue(text,value){
-  if(!value)return false;
-  const v=String(value).toUpperCase().trim();
-  if(v.length<6)return false;
-  let from=0,i;
-  while((i=text.indexOf(v,from))>=0){
-    const before=i>0?text.charAt(i-1):' ';
-    const after=(i+v.length)<text.length?text.charAt(i+v.length):' ';
-    if(!/[A-Z0-9]/.test(before)&&!/[A-Z0-9]/.test(after))return true;
-    from=i+1;
-  }
-  return false;
+// valor de cada proyecto dentro del texto.
+//
+// Y cada sistema los escribe a su manera: la lista guarda B-2025-019905-0000 y
+// la ciudad manda B2025019905 0000 en el asunto. Así que la comparación es por
+// tramos alfanuméricos, admitiendo cualquier separador entre ellos o ninguno.
+// Se sigue exigiendo que el valor no quede pegado a otro alfanumérico, para no
+// cazar un número dentro de otro.
+const VALUE_RE=new Map();
+function valueRegex(value){
+  const v=String(value||'').toUpperCase().trim();
+  if(VALUE_RE.has(v))return VALUE_RE.get(v);
+  const chunks=v.match(/[A-Z0-9]+/g);
+  const re=(!chunks||chunks.join('').length<6)
+    ?null
+    :new RegExp('(^|[^A-Z0-9])'+chunks.join('[\\s\\-/.]*')+'($|[^A-Z0-9])');
+  VALUE_RE.set(v,re);
+  return re;
 }
+// textPlain es el mismo texto sin separadores, para el caso contrario: la lista
+// lo tiene pegado y el correo lo escribe con guion.
+function containsValue(text,value,textPlain){
+  const re=valueRegex(value);
+  if(!re)return false;
+  return re.test(text)||(!!textPlain&&re.test(textPlain));
+}
+function stripSeparators(text){return String(text||'').replace(/[-/]/g,'')}
 function dedupeRows(rows){
   const seen={},out=[];
   rows.forEach(r=>{if(!seen[r.id]){seen[r.id]=1;out.push(r)}});
@@ -1170,6 +1181,7 @@ function dedupeRows(rows){
 function matchProject(subject,from,body,rows){
   const subjectText=normText(subject);
   const text=normText(subject+' '+(body||''));
+  const textPlain=stripSeparators(text);
   const sender=String(from||'').toLowerCase().trim();
   // Lo que se vio en el correo, para poder explicar por qué no hubo match.
   const scanned={codes:[],nums:[],folios:[],sender:sender,rows:rows?rows.length:0};
@@ -1190,14 +1202,18 @@ function matchProject(subject,from,body,rows){
       if(hits.length)return result('código de proyecto',hits);
     }
   }
+  // El código también se escribe sin guion (CSP0001), y entonces el patrón de
+  // arriba no lo ve. Buscar cada id como valor lo recoge.
+  const idHits=rows.filter(r=>containsValue(text,r.id,textPlain));
+  if(idHits.length)return result('código de proyecto',idHits);
   // 2. Número de permiso o de proceso (los correos de las ciudades).
-  const numHits=rows.filter(r=>containsValue(text,r.permiso)||containsValue(text,r.proceso));
+  const numHits=rows.filter(r=>containsValue(text,r.permiso,textPlain)||containsValue(text,r.proceso,textPlain));
   if(numHits.length){
     scanned.nums=numHits.map(r=>r.permiso||r.proceso);
     return result('número de permiso o proceso',numHits);
   }
   // 3. Folio.
-  const folioHits=rows.filter(r=>containsValue(text,r.folio));
+  const folioHits=rows.filter(r=>containsValue(text,r.folio,textPlain));
   if(folioHits.length){
     scanned.folios=folioHits.map(r=>r.folio);
     return result('folio',folioHits);
@@ -1222,7 +1238,9 @@ function getBodyText(cb){
   try{
     if(mailItem&&mailItem.body&&mailItem.body.getAsync){
       mailItem.body.getAsync(Office.CoercionType.Text,function(r){
-        cb(r.status===Office.AsyncResultStatus.Succeeded?String(r.value||'').slice(0,8000):'');
+        // 40k y no 8k: en un hilo largo el número de permiso queda enterrado
+        // al final, y recorrer el texto cuesta milisegundos.
+        cb(r.status===Office.AsyncResultStatus.Succeeded?String(r.value||'').slice(0,40000):'');
       });
       return;
     }
