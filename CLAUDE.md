@@ -127,6 +127,48 @@ full item update, so any mapped column that is not resent is blanked. Writing th
 here would silently wipe project data. A new requirement gets a new dedicated flow, never an
 extra field bolted onto a shared save flow.
 
+### `EMP · Archivar por responsable` — the sweeper
+
+A scheduled flow (every 5 min) that files messages by their category, with no HTTP trigger and
+so no URL and no env var. It is what actually guarantees the filing: the taskpane's own move only
+runs while someone has the message open in the add-in, whereas this catches anything tagged from
+anywhere — Outlook mobile, desktop, another person.
+
+```
+Recurrence 5 min
+└ Compose RESPONSABLES   [{cat, id}, …]  — one entry per responsable folder
+└ Apply to each          @outputs('RESPONSABLES')
+   └ Get emails (V3)     folderPath Inbox · searchQuery  category:@{items('Apply_to_each')?['cat']}
+   └ Apply to each 1     @outputs('Get_emails_(V3)')?['body/value']
+      └ Move email (V2)  messageId  @items('Apply_to_each_1')?['id']
+                         folderPath @items('Apply_to_each')?['id']
+```
+
+Four things cost real time to find, so don't rediscover them:
+
+- **`folderPath` needs the literal `Id::` prefix** before the folder id (`Id::AAMk…`). Without it
+  the connector reads the id as a folder *name* and answers 404 with a message that quotes the
+  whole id back at you. The ids are stored pre-prefixed in `RESPONSABLES`.
+- **`category:` works in `Search Query`** even though Graph's `$search` doc doesn't list it — the
+  connector queries the Exchange index, which does support it. `$filter` on `categories` is not
+  reachable from this action at all.
+- **No quotes around the value.** The connector wraps the whole query in `"…"` itself, so
+  `category:"NAME"` produces nested quotes and a KQL syntax error. Single-word names only.
+- **Set concurrency to 1** on both `Apply to each`. The default is 20 parallel branches, and
+  several dozen simultaneous moves against one mailbox get throttled by Exchange.
+
+Self-limiting by design: a moved message leaves the Inbox, so the next run no longer sees it. No
+"already processed" bookkeeping.
+
+The folder ids come from
+`GET https://graph.microsoft.com/v1.0/me/mailFolders/inbox/childFolders?$select=id,displayName`
+via the connector's *Send an HTTP request*. Re-run it when a responsable is added.
+
+Consequence for the client: **Devolver has to clear the responsable**, not just move the message
+back. Leaving the category on a message returned to the Inbox just gets it filed again on the next
+sweep. Same reason the ⚙ Config switch only governs the instant move — the sweeper archives
+regardless.
+
 ## Environment variables
 
 Set in Vercel → Settings → Environment Variables. See `.env.example`.

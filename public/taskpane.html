@@ -347,7 +347,7 @@
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="autoMoveChk" onchange="toggleAutoMove()" style="width:16px;height:16px;cursor:pointer"/>
         <span>Mover el correo al asignar responsable</span></label>
-      <div class="note-hint" style="margin-top:6px">Va a la subcarpeta de Bandeja de entrada con el nombre del responsable. Solo se mueve si la etiqueta se aplicó, y siempre puedes devolverlo.</div></div>
+      <div class="note-hint" style="margin-top:6px">Va a la subcarpeta de Bandeja de entrada con el nombre del responsable. Solo se mueve si la etiqueta se aplicó, y siempre puedes devolverlo — devolver quita también el responsable.<br>Apagarlo solo evita el movimiento inmediato: el flow del buzón archiva por etiqueta cada pocos minutos de todas formas.</div></div>
     <div class="settings-section"><div class="settings-title">🔍 Diagnóstico de etiquetas</div>
       <button class="btn btn-ghost btn-sm" onclick="renderDiag()">Ver categorías del buzón</button>
       <div id="diagBox" style="margin-top:10px"></div></div>
@@ -361,7 +361,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-06 · mover a carpeta';
+const BUILD='2026-08-07 · devolver quita el responsable';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -1378,18 +1378,28 @@ async function moveToResponsableFolder(name,silent){
     showToast('No se pudo mover: '+e.message,true);
   }
 }
+// Devolver no puede limitarse a mover: el flow que barre el buzón archiva por
+// etiqueta, así que un correo devuelto con la del responsable todavía puesta
+// volvería a su carpeta en la ronda siguiente. Quitar la asignación es lo único
+// que se sostiene — la etiqueta es la asignación, y la carpeta sale de ella.
 async function undoMove(){
   const d=getEmailData();
-  const from=d.movedTo;
-  if(!from)return;
+  if(!d.movedTo)return;
+  const oldResp=d.responsable;
   try{
     await moveMessage('');
-    const nd=getEmailData();nd.movedTo='';
-    setEmailData(nd,function(){
-      showToast('Devuelto a Bandeja de entrada');
-      renderMoveBanner('');
+  }catch(e){showToast('No se pudo devolver: '+e.message,true);return}
+  const nd=getEmailData();
+  nd.movedTo='';
+  nd.responsable='';
+  setEmailData(nd,function(){
+    renderResponsable();
+    renderMoveBanner('');
+    syncCategories(undefined,oldResp,function(applied,err){
+      if(err){showToast('Devuelto, pero la etiqueta '+oldResp+' sigue puesta: '+err,true);return}
+      showToast(oldResp?'Devuelto · responsable '+oldResp+' quitado':'Devuelto a Bandeja de entrada');
     });
-  }catch(e){showToast('No se pudo devolver: '+e.message,true)}
+  });
 }
 function renderMoveBanner(folder){
   const el=document.getElementById('moveBanner');
@@ -1398,7 +1408,7 @@ function renderMoveBanner(folder){
   if(!f){el.innerHTML='';return}
   el.innerHTML=`<div class="match-banner auto">
     <div class="match-text">📂 En <strong>Bandeja de entrada/${esc(f)}</strong></div>
-    <button class="btn btn-ghost btn-sm" onclick="undoMove()">Devolver</button></div>`;
+    <button class="btn btn-ghost btn-sm" onclick="undoMove()" title="Lo devuelve a la bandeja y quita el responsable">Devolver</button></div>`;
 }
 function toggleAutoMove(){
   const on=document.getElementById('autoMoveChk').checked;
