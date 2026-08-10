@@ -356,7 +356,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-10 · responsable con el proyecto';
+const BUILD='2026-08-10 · dueño citado en el cuerpo';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -1247,11 +1247,29 @@ function matchProject(subject,from,body,rows){
     return st.length>=8&&addrText.indexOf(st)>=0;
   });
   if(addrHits.length)return result('dirección',addrHits);
-  // 5. Correo del dueño. El más débil: un dueño puede tener varios proyectos.
+  // 5. Correo del dueño como remitente. El más débil: un dueño puede tener
+  // varios proyectos.
   if(sender){
     const hits=rows.filter(r=>r.ownerEmail&&r.ownerEmail===sender);
     if(hits.length)return result('correo del dueño',hits);
   }
+  // 6. El correo del dueño escrito en el cuerpo. La ciudad manda desde un
+  // noreply, pero la cadena citada suele llevar la dirección del dueño. Se
+  // busca sobre el texto crudo: normText se come los puntos y dejaría
+  // "DBSTANCE@HOTMAIL COM".
+  const rawLow=String(subject+' '+(body||'')).toLowerCase();
+  const mailHits=rows.filter(function(r){
+    const e=r.ownerEmail;
+    if(!e||e.length<8)return false;
+    let from=0,i;
+    while((i=rawLow.indexOf(e,from))>=0){
+      const before=i>0?rawLow.charAt(i-1):' ';
+      if(!/[a-z0-9._%+-]/.test(before))return true;
+      from=i+1;
+    }
+    return false;
+  });
+  if(mailHits.length)return result('correo del dueño en el cuerpo',mailHits);
   return none();
 }
 

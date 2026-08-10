@@ -51,12 +51,25 @@ Security model — the reason the API layer exists:
 
 ## Automatic matching
 
-Opening a message runs `matchProject(subject, from, body, rows)`, a pure function that tries five
+Opening a message runs `matchProject(subject, from, body, rows)`, a pure function that tries six
 signals in order of confidence and stops at the first that yields exactly one row: project code
 in the subject (`CSP-0001`), permit or process number (`B-2025-…`, `PR-2025-…`), folio, full
-street, and sender against `OWNEREMAIL`. Several rows means candidates for the user to pick, never
-a guess — 72 of the 468 projects share a street. Being pure, it is tested against the real list
-and can move server-side when a Power Automate flow needs the same logic.
+street, sender against `OWNEREMAIL`, and `OWNEREMAIL` quoted anywhere in the body. Several rows
+means candidates for the user to pick, never a guess — 72 of the 468 projects share a street.
+Being pure, it is tested against the real list and can move server-side when a Power Automate
+flow needs the same logic.
+
+The last signal exists because the city writes from a `noreply@`, but the quoted chain underneath
+usually carries the owner's address. It searches the raw lowercased text, not `normText`, which
+strips dots and would leave `DBSTANCE@HOTMAIL COM`. Over the real list: of the 174 rows with a
+usable `OWNEREMAIL`, 146 resolve to one project and 28 to candidates; the four rows storing `"-"`
+are ignored by the length guard.
+
+The other SharePoint columns were reviewed and offer nothing. 106 of the 468 rows carry no strong
+identifier at all; adding `OWNERNAME` would cover 7 of them and `Telefono` 4, against real
+false-positive risk — `GCFI LLC` appears twice and 18 owner names are a single word. `Notes` reads
+like an identifier in a handful of rows (`BPI2538908`) and is free-text commentary in the other
+168 (`SHUTTERS`, `VENTANAS`, people's names). Don't wire them in.
 
 It fills only what is empty: a message that already has a project is left alone, and a manually
 set responsable is never overwritten. The banner names the signal that matched and offers undo.
