@@ -331,12 +331,11 @@
   </div>
   <!-- SETTINGS -->
   <div class="panel" id="panel-settings">
-    <div class="info-banner">La configuración se guarda en tu navegador. Cada miembro del equipo inicia sesión y configura su nombre la primera vez.</div>
+    <div class="info-banner">La configuración se guarda en tu navegador. Cada miembro del equipo inicia sesión con su propia cuenta.</div>
     <div class="settings-section"><div class="settings-title">🔐 Conexión con SharePoint</div>
       <div id="authBox"></div></div>
-    <div class="settings-section"><div class="settings-title">👤 Tu nombre (para las notas)</div>
-      <div class="input-row"><input type="text" class="text-input" id="authorName" placeholder="Ej: Carlos, Ana, etc."/>
-        <button class="btn btn-primary btn-sm" onclick="saveAuthorName()">Guardar</button></div></div>
+    <div class="settings-section"><div class="settings-title">👤 Firma de las notas</div>
+      <div id="authorBox" class="note-hint"></div></div>
     <div class="settings-section"><div class="settings-title">🏷️ Estados personalizados</div>
       <div class="editable-list" id="statusList"></div>
       <div class="input-row"><input type="text" class="text-input" id="newStatusName" placeholder="Nombre del estado"/>
@@ -357,7 +356,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-07 · números con o sin guiones';
+const BUILD='2026-08-10 · responsable con el proyecto';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -380,9 +379,10 @@ let sbConfig=null,sbSession=null;
 function lsGet(k,fb){try{const v=localStorage.getItem(STORAGE_PREFIX+k);return v?JSON.parse(v):fb}catch{return fb}}
 function lsSet(k,v){try{localStorage.setItem(STORAGE_PREFIX+k,JSON.stringify(v))}catch{}}
 // Manual name wins; otherwise the display_name CCP already has for this user.
+// La nota la firma quien está en sesión, no un nombre escrito a mano: Outlook
+// es una cuenta compartida y Supabase es la única identidad real que hay aquí.
+// El display_name viene de user_roles, el mismo que muestra CCP.
 function getAuthor(){
-  const manual=lsGet('author','');
-  if(manual)return manual;
   if(sbSession&&sbSession.displayName)return sbSession.displayName;
   if(sbSession&&sbSession.email)return sbSession.email.split('@')[0];
   return 'Anónimo';
@@ -793,7 +793,13 @@ function updateHeaderTags(){
   if(d.status){const t=document.createElement('span');t.className='email-category has-status';t.textContent=d.status;el.appendChild(t)}
 }
 function renderSettings() {
-  document.getElementById('authorName').value = lsGet('author', '');
+  const ab = document.getElementById('authorBox');
+  if (ab) {
+    const a = getAuthor();
+    ab.textContent = a === 'Anónimo'
+      ? 'Inicia sesión para poder escribir notas: se firman con tu nombre de usuario.'
+      : 'Tus notas se firman como ' + a + '. Sale de tu cuenta, no se escribe aquí.';
+  }
   const stamp = document.getElementById('buildStamp');
   if (stamp) stamp.textContent = 'Versión ' + BUILD;
   // Render Colors
@@ -854,11 +860,28 @@ function filterProjects(){
   }).join('');
   dd.innerHTML=h
 }
+function sameName(a,b){return String(a||'').trim().toUpperCase()===String(b||'').trim().toUpperCase()}
 function selectProject(name){
-  const d=getEmailData();const old=d.project;
+  const d=getEmailData();const old=d.project,oldResp=d.responsable;
   const sp=splitProject(name);
   d.project=sp.id||name;  // Save only short ID in custom properties
-  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);showToast(d.project?'Proyecto: '+d.project:'Proyecto removido')});
+  // Elegir proyecto trae su responsable. Se rellena si está vacío, y también si
+  // el que había venía del proyecto anterior — así cambiar de proyecto cambia de
+  // responsable. Lo que no se toca es un nombre elegido a mano que no coincide
+  // con ningún proyecto: eso fue una decisión de alguien.
+  const oldRow=findProjectRow(old),newRow=findProjectRow(d.project);
+  const heredado=oldRow&&sameName(oldRow.responsable,oldResp);
+  if(newRow&&newRow.responsable&&(!oldResp||heredado))d.responsable=newRow.responsable;
+  setEmailData(d,function(){
+    renderProjectSearch();renderResponsable();updateHeaderTags();
+    syncCategories(old,oldResp,function(applied,err){
+      if(err){showToast(err,true);return}
+      const cambio=!sameName(oldResp,d.responsable);
+      showToast(d.project
+        ?'Proyecto: '+d.project+(cambio&&d.responsable?' · '+d.responsable:'')
+        :'Proyecto removido');
+    });
+  });
   document.getElementById('projectDropdown').classList.remove('open')
 }
 function clearProject(){selectProject('')}
@@ -890,7 +913,7 @@ function saveResponsable(){
 function noteKeyDown(e,id){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();addNote(id)}}
 function addNote(tid){
   const ta=document.getElementById(tid),txt=ta.value.trim();if(!txt)return;
-  const author=getAuthor();if(author==='Anónimo'){showToast('Configura tu nombre en ⚙ Config',true);return}
+  const author=getAuthor();if(author==='Anónimo'){showToast('Inicia sesión en ⚙ Config para firmar la nota',true);return}
   const d=getEmailData();if(!d.notes)d.notes=[];
   d.notes.push({author,text:txt,date:new Date().toLocaleString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})});
   setEmailData(d,function(){ta.value='';renderNotes();updateSummary();syncCategories();showToast('Nota guardada');setTimeout(autoSyncSP,500)})
@@ -990,11 +1013,10 @@ function inlineAddProject(){
 }
 
 // ── Settings ──
-function saveAuthorName(){const n=document.getElementById('authorName').value.trim();if(!n)return;lsSet('author',n);showToast('Nombre: '+n)}
 function pickColor(n){selectedColor=n;renderSettings()}
 function addStatus(){const inp=document.getElementById('newStatusName'),n=inp.value.trim();if(!n)return;const ss=getStatuses();if(ss.some(s=>s.name.toLowerCase()===n.toLowerCase())){showToast('Ya existe',true);return}ss.push({name:n,color:selectedColor});lsSet('statuses',ss);inp.value='';renderSettings();renderStatuses();showToast('Estado agregado')}
 function removeStatus(i){const ss=getStatuses();ss.splice(i,1);lsSet('statuses',ss);renderSettings();renderStatuses()}
-function resetAll(){if(!confirm('¿Borrar configuración local?'))return;localStorage.removeItem(STORAGE_PREFIX+'author');localStorage.removeItem(STORAGE_PREFIX+'statuses');localStorage.removeItem(STORAGE_PREFIX+'projects');renderAll();showToast('Restablecido')}
+function resetAll(){if(!confirm('¿Borrar configuración local?'))return;localStorage.removeItem(STORAGE_PREFIX+'statuses');localStorage.removeItem(STORAGE_PREFIX+'projects');renderAll();showToast('Restablecido')}
 function refreshData(){loadCustomProperties(function(){renderAll();updateHeaderTags()});showToast('Actualizado')}
 
 // ── Auth (Supabase) ──
@@ -1063,7 +1085,7 @@ async function loadProfile(){
     sbSession.displayName=me.displayName||'';
     sbSession.role=me.role||null;
     lsSet('session',sbSession);
-    renderAuth();renderNotes();
+    renderAuth();renderNotes();renderSettings();
   }catch(e){}
 }
 

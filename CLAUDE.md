@@ -61,6 +61,12 @@ and can move server-side when a Power Automate flow needs the same logic.
 It fills only what is empty: a message that already has a project is left alone, and a manually
 set responsable is never overwritten. The banner names the signal that matched and offers undo.
 
+Picking a project by hand also brings its responsable across. The rule that decides whether to
+overwrite is *provenance*, not emptiness: the responsable is replaced when it is empty or when it
+still equals the previous project's responsable, so switching projects switches the person, while
+a name someone chose deliberately survives. A project with no `Responsable` in SharePoint (62 of
+the 468) leaves whatever was there.
+
 **Separators are noise.** The list stores `B-2025-019905-0000` and the city writes
 `B2025019905 0000` in the subject; 200 of the 468 rows carry hyphens and 62 carry none, so
 comparing literally lost matches in both directions. `containsValue` builds a regex from the
@@ -105,8 +111,9 @@ Other core pieces:
 - `autoSyncSP()` fires silently after status/note changes; it no-ops when signed out.
 - Project names are stored as short IDs (`CCP-0031`); `getFullProjectName()` re-expands them
   against the merged local + SharePoint list.
-- Note author: the manually configured name wins, otherwise the local part of the signed-in
-  Supabase email.
+- Note author: the signed-in user's `display_name`, falling back to the local part of their
+  Supabase email. There is no name field in ⚙ Config any more — a typed name could not be
+  trusted on a shared Outlook account, and Supabase is the only real identity here.
 
 ## Identity
 
