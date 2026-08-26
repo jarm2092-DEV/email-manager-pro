@@ -298,6 +298,7 @@
       <div class="responsable-section">
         <select class="text-input" id="responsableSelect" onchange="saveResponsable()"></select>
       </div>
+      <div id="respDrift"></div>
     </div>
     <div class="section">
       <div class="section-label section-label-standalone">Nota rápida</div>
@@ -356,7 +357,7 @@
 <script>
 const STORAGE_PREFIX='emp_';
 // Sirve para saber si Outlook está sirviendo una copia cacheada del panel.
-const BUILD='2026-08-10 · dueño citado en el cuerpo';
+const BUILD='2026-08-26 · aviso de cambio de responsable';
 const COLORS=[{name:'accent',hex:'#6c72ff'},{name:'success',hex:'#34d399'},{name:'warning',hex:'#fbbf24'},{name:'danger',hex:'#f87171'},{name:'info',hex:'#60a5fa'},{name:'orange',hex:'#fb923c'},{name:'pink',hex:'#f472b6'}];
 const DEFAULT_STATUSES=[{name:'Pendiente',color:'warning'},{name:'En proceso',color:'info'},{name:'Urgente',color:'danger'},{name:'Delegado',color:'orange'},{name:'Resuelto',color:'success'}];
 const CAT_NOTAS='EMP Notas';
@@ -577,7 +578,14 @@ function syncCategories(oldProject,oldResponsable,cb){
         const toRm=[];
         if(!hasNotas&&cur.indexOf(CAT_NOTAS)>=0)toRm.push(CAT_NOTAS);
         if(oldPid&&oldPid!==newPid&&cur.indexOf(oldPid)>=0)toRm.push(oldPid);
-        if(oldRespCat&&oldRespCat!==respCat&&cur.indexOf(oldRespCat)>=0)toRm.push(oldRespCat);
+        // La etiqueta puesta puede no coincidir en mayúsculas con la que se
+        // calcula ahora (se aplicó como respaldo en mayúsculas y luego alguien
+        // la registró con otro formato). Se quita la que el correo lleva de
+        // verdad, no la que deberíamos haber puesto.
+        if(oldRespCat&&!sameName(oldRespCat,respCat)){
+          const puesta=cur.find(function(c){return sameName(c,oldRespCat)});
+          if(puesta)toRm.push(puesta);
+        }
         // EMP Notas y la del responsable se quedan registradas; la del proyecto
         // se crea, se aplica y se borra de la lista maestra.
         const keep=[CAT_NOTAS,respCat].filter(Boolean);
@@ -743,6 +751,47 @@ function renderResponsable(){
   if(cur&&!list.some(function(r){return r.toUpperCase()===cur.toUpperCase()}))list.push(cur);
   sel.innerHTML='<option value="">— Sin responsable —</option>'+
     list.map(function(r){return '<option value="'+esc(r)+'"'+(r.toUpperCase()===cur.toUpperCase()?' selected':'')+'>'+esc(r)+'</option>'}).join('');
+  renderResponsableDrift();
+}
+// Cambiar el responsable de un proyecto en SharePoint no reetiqueta los correos
+// que ya estaban asignados: el responsable vive en el propio correo y viaja con
+// él. Se avisa del desfase y se cambia a mano, porque puede haber una razón para
+// que este correo se quede con quien lo venía llevando.
+function responsableDrift(){
+  if(!spProjects.length)return null;
+  const d=getEmailData();
+  // Sin responsable no hay desfase: es una decisión (deshacer, o quitarlo para
+  // que el flow deje de archivar el correo), no un dato que se quedó atrás.
+  if(!d.project||!d.responsable)return null;
+  const row=findProjectRow(extractProjectId(d.project)||d.project);
+  if(!row||!row.responsable)return null;  // 62 proyectos no traen responsable
+  if(sameName(row.responsable,d.responsable))return null;
+  return {row:row,actual:d.responsable,nuevo:row.responsable};
+}
+function renderResponsableDrift(){
+  const el=document.getElementById('respDrift');
+  if(!el)return;
+  const dr=responsableDrift();
+  if(!dr){el.innerHTML='';return}
+  el.innerHTML=`<div class="match-banner suggest" style="margin:10px 0 0">
+    <div class="match-text"><strong>${esc(dr.row.id)}</strong> ahora es de <strong>${esc(dr.nuevo)}</strong>,
+      pero este correo sigue etiquetado con ${esc(dr.actual)}.</div>
+    <button class="btn btn-primary btn-sm" onclick="applyResponsableDrift()">Actualizar</button></div>`;
+}
+function applyResponsableDrift(){
+  const dr=responsableDrift();
+  if(!dr)return;
+  const d=getEmailData(),oldResp=d.responsable;
+  d.responsable=dr.nuevo;
+  setEmailData(d,function(){
+    renderResponsable();updateHeaderTags();
+    // syncCategories con el responsable anterior: retira esa etiqueta y pone la
+    // nueva. El flow que barre el buzón se encarga de mover el correo.
+    syncCategories(undefined,oldResp,function(applied,err){
+      if(err){showToast(err,true);return}
+      showToast('Responsable: '+dr.nuevo+(applied.length?' · '+applied.join(', '):''));
+    });
+  });
 }
 function renderNotes(){
   const d=getEmailData(),notes=d.notes||[];
@@ -1009,7 +1058,7 @@ function inlineAddProject(){
   document.getElementById('projectInline').classList.remove('visible');
   const sp=splitProject(n);
   const d=getEmailData();const old=d.project;d.project=sp.id||n;
-  setEmailData(d,function(){renderProjectSearch();updateHeaderTags();syncCategories(old);renderSettings();showToast('Proyecto: '+(sp.id||n))})
+  setEmailData(d,function(){renderProjectSearch();renderResponsable();updateHeaderTags();syncCategories(old);renderSettings();showToast('Proyecto: '+(sp.id||n))})
 }
 
 // ── Settings ──

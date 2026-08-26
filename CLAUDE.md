@@ -80,6 +80,13 @@ still equals the previous project's responsable, so switching projects switches 
 a name someone chose deliberately survives. A project with no `Responsable` in SharePoint (62 of
 the 468) leaves whatever was there.
 
+The responsable lives on the message, not on the project, so **changing a project's `Responsable` in
+SharePoint does not re-tag the mail already assigned to it**. Opening such a message shows a notice
+under the responsable dropdown naming both people, with a button that swaps the category. It is
+deliberately manual: a thread may be meant to stay with whoever was carrying it. Two cases stay
+silent — an empty responsable is a decision (undo, or clearing it so the sweeper stops filing), and
+a project with no `Responsable` in SharePoint never triggers the notice.
+
 **Separators are noise.** The list stores `B-2025-019905-0000` and the city writes
 `B2025019905 0000` in the subject; 200 of the 468 rows carry hyphens and 62 carry none, so
 comparing literally lost matches in both directions. `containsValue` builds a regex from the
@@ -108,6 +115,9 @@ This is the part that wasted the most time, so read it before touching `syncCate
   that exist and would apply cleanly.
 - **Apply one category at a time.** `categories.addAsync` is all-or-nothing, so one unknown name
   in the batch takes the valid ones down with it.
+- **Removing a category matches case-insensitively.** A responsable tag may have been applied as
+  the uppercase fallback and only later registered in the master list with different casing.
+  Comparing literally left the old tag sitting on the message beside the new one.
 - **Applying an existing category needs no elevated permission.** Only creating one does, which
   is why the manifest asks for `ReadWriteMailbox` (v1.4.0.0). Under `ReadWriteItem` the responsable
   tag still lands and only the project tag is refused.
